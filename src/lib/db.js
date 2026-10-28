@@ -169,7 +169,7 @@ export async function deleteInBodyLog(id) {
 // и расширяет CHECK). См. supabase/schema.sql.
 const GOAL_TYPES = ['weight', 'fatPercent', 'musclePercent'];
 
-export async function saveGoal(uid, goal) {
+export async function saveGoal(uid, goal, baseline = null) {
   // одна активная цель: предыдущие закрываем
   await supabase.from('goals').update({ status: 'completed' }).eq('user_id', uid).eq('status', 'active');
   // DECISION: в assessment лежат Date-объекты (realisticDate/originalDate) — Postgres jsonb их не принимает,
@@ -185,7 +185,10 @@ export async function saveGoal(uid, goal) {
     assessment: serialize(goal.assessment), status: 'active',
   }).select().single();
   if (error) throw error;
-  return normalizeGoalRow(data);
+  // DECISION (исправление «undefined.toFixed» после нажатия «Рассчитать»):
+  // раньше сюда не передавался baseline и repairAssessment не мог восстановить currentValue
+  // для старых мигрированных строк без jsonb-колонки assessment → GoalTab падал в ErrorBoundary.
+  return normalizeGoalRow(data, baseline);
 }
 
 // DECISION: нормализация строки goals (мигрированные колонки) → формат цели приложения.
@@ -204,11 +207,11 @@ function repairAssessment(a, goalRow, baseline, gRow = {}) {
   out.targetType = GOAL_TYPES.includes(targetType) ? targetType : 'weight';
   out.targetUnit = typeof src.targetUnit === 'string' && src.targetUnit ? src.targetUnit : unit;
   if (num(src.currentValue) === undefined && baseline) {
-    out.currentValue = out.targetType === 'weight' ? baseline.weight
-      : out.targetType === 'fatPercent' ? baseline.fatPercent : baseline.musclePercent;
-  } else {
-    out.currentValue = num(src.currentValue) ?? 0;
+    out.currentValue = num(out.targetType === 'weight' ? baseline.weight
+      : out.targetType === 'fatPercent' ? baseline.fatPercent : baseline.musclePercent);
   }
+  // финальная гарантия: currentValue ВСЕГДА конечное число (иначе GoalTab падает на undefined.toFixed)
+  if (num(out.currentValue) === undefined) out.currentValue = 0;
   if (tv !== undefined) out.targetValue = tv;
   else if (isFinite(rowTarget)) out.targetValue = rowTarget;
   else out.targetValue = 0;

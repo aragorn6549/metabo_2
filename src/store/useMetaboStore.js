@@ -138,10 +138,17 @@ export function useMetaboStore(user) {
   };
 
   const setGoalAndSave = async (g) => {
-    setGoal(g);
+    // DECISION: до записи в БД ставим локальную копию с гарантированно числовым assessment.currentValue,
+    // чтобы GoalTab не падал на undefined.toFixed, если строка БД вернётся без этого поля.
+    const safeAssessment = {
+      ...g.assessment,
+      currentValue: Number.isFinite(+g.assessment?.currentValue) ? +g.assessment.currentValue
+        : Number(baseline?.weight ?? baseline?.fatPercent ?? baseline?.musclePercent ?? 0),
+    };
+    setGoal({ ...g, assessment: safeAssessment });
     try {
-      const saved = await db.saveGoal(uid, g);
-      setGoal(saved);
+      const saved = await db.saveGoal(uid, { ...g, assessment: safeAssessment }, baseline);
+      if (saved) setGoal(saved);
     } catch (err) { console.error('saveGoal:', err); throw err; }
   };
 
