@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import AuthScreen from '@/features/auth/AuthScreen';
 import OnboardingScreen from '@/features/onboarding/OnboardingScreen';
@@ -15,12 +15,15 @@ import MobileNav from '@/components/MobileNav';
 import ActivityLogger from '@/features/activities/ActivityLogger';
 import InBodyEditor from '@/features/inbody/InBodyEditor';
 import { useMetaboStore } from '@/store/useMetaboStore';
+import { buildDemoData } from '@/demo/demoData';
 
 // DECISION: App — 1:1 структура прототипа (строки 2547–3057), заменены только:
 // localStorage → Supabase (useMetaboStore), email-логин → Supabase Auth, демо-режим удалён (ТЗ §5.1).
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  // DECISION: демо-режим по кнопке «Демонстрация» на экране входа — синтетические данные, БД не используется
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -147,7 +150,8 @@ export default function App() {
   };
 
   if (!authChecked) return <div className="app" />;
-  if (!user) return <AuthScreen />;
+  if (demo) return <DemoApp onExit={() => setDemo(false)} showToast={showToast} toast={toast} />;
+  if (!user) return <AuthScreen onDemo={() => { setTab('map'); setMobileTab('map'); setDemo(true); }} />;
   if (!baseline || editingBaseline) {
     return <OnboardingScreen key={editingBaseline ? 'edit' : 'new'} initial={baseline}
       onComplete={handleOnboardingComplete}
@@ -271,6 +275,130 @@ export default function App() {
       {dishEditorOpen && <DishEditor dish={dishEditorDish} onSave={handleSaveDish} onClose={closeDishEditor} />}
       {inbodyEditorOpen && <InBodyEditor entry={inbodyEditorEntry} baseline={baseline}
         onSave={handleSaveInbody} onClose={closeInbodyEditor} />}
+      {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
+    </div>
+  );
+}
+
+// ============================================================
+// ДЕМО-РЕЖИМ (кнопка «Демонстрация» на экране входа)
+// DECISION: те же компоненты вкладок, что и в боевом режиме; данные — синтетические из
+// src/demo/demoData.js (та же математика приложения), Supabase/БД не вызывается ни разу.
+// Все мутации — no-op с предупреждающим тостом.
+function DemoApp({ onExit, showToast, toast }) {
+  const [tab, setTab] = useState('map');
+  const [mobileTab, setMobileTab] = useState('map');
+  const [loggerOpen, setLoggerOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const data = useMemo(() => buildDemoData(), []);
+  const { baseline, foodLogs, activities, dishes, goal, history, inbodyLogs, todayData, sim, plan } = data;
+  const hasAnyData = true;
+
+  const demoBlocked = () => showToast('🎬 В демо-режиме изменения не сохраняются', 'danger');
+  const openLoggerNew = () => { setEditingEntry(null); setLoggerOpen(true); };
+  const openLoggerEdit = (entry) => { setEditingEntry(entry); setLoggerOpen(true); };
+  const closeLogger = () => { setLoggerOpen(false); setEditingEntry(null); };
+  const goToGoal = () => { setTab('goal'); setMobileTab('goal'); };
+
+  const banner = (
+    <div style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.4)',
+      color: 'var(--goal)', borderRadius: 12, padding: '8px 14px', margin: '10px 16px 0',
+      fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <span>🎬 Демонстрационный режим — данные синтетические, без аккаунта и БД</span>
+      <button className="logout-btn" onClick={onExit}>← Назад к входу</button>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="app">
+        <div className="mobile-header">
+          <div className="logo">Meta<span>bo</span></div>
+          <div className="mobile-user">
+            <div className="mobile-avatar">{baseline.name.charAt(0).toUpperCase()}</div>
+            <span>{baseline.name}</span>
+          </div>
+        </div>
+        {banner}
+        <div className="mobile-content">
+          {mobileTab === 'map' && (
+            <>
+              <MetabolismMap baseline={baseline} todayData={todayData} sim={sim} plan={plan}
+                hasAnyData={hasAnyData} goal={goal} foodLogs={foodLogs} activities={activities}
+                onOpenLogger={openLoggerNew} onGoToGoal={goToGoal} />
+              <ActivityHistory foodLogs={foodLogs} activities={activities}
+                onEdit={openLoggerEdit} onDelete={demoBlocked} />
+            </>
+          )}
+          {mobileTab === 'goal' && (
+            <><div className="mobile-page-title">Цель</div>
+              <GoalTab baseline={baseline} tdee={todayData.tdee} goal={goal} plan={plan} onSetGoal={demoBlocked} /></>
+          )}
+          {mobileTab === 'dishes' && (
+            <DishesTab dishes={dishes} onEditDish={demoBlocked} onDeleteDish={demoBlocked} onAddDish={demoBlocked} />
+          )}
+          {mobileTab === 'journal' && (
+            <><div className="mobile-page-title">Журнал</div>
+              <Journal history={history} goal={goal} baseline={baseline} sim={sim} todayData={todayData}
+                inbodyLogs={inbodyLogs} onEditInbody={demoBlocked} onDeleteInbody={demoBlocked} onAddInbody={demoBlocked} /></>
+          )}
+          {mobileTab === 'profile' && (
+            <MobileProfile user="demo@metabo.app" baseline={baseline} goal={goal}
+              onLogout={onExit} onUpdateBaseline={demoBlocked} onOpenHelp={() => showToast('🎬 Справка доступна в основном режиме', 'danger')} />
+          )}
+        </div>
+        <MobileNav tab={mobileTab} onTab={setMobileTab} onAdd={openLoggerNew} />
+        {loggerOpen && <ActivityLogger baseline={baseline} editingEntry={editingEntry}
+          dishes={dishes} onClose={closeLogger} onSave={(e) => { demoBlocked(); closeLogger(); void e; }} />}
+        {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <div className="header">
+        <div className="logo">Meta<span>bo</span></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="tabs">
+            <button className={`tab ${tab === 'map' ? 'active' : ''}`} onClick={() => setTab('map')}>Карта</button>
+            <button className={`tab ${tab === 'goal' ? 'active' : ''}`} onClick={() => setTab('goal')}>Цель</button>
+            <button className={`tab ${tab === 'dishes' ? 'active' : ''}`} onClick={() => setTab('dishes')}>Рацион</button>
+            <button className={`tab ${tab === 'journal' ? 'active' : ''}`} onClick={() => setTab('journal')}>Журнал</button>
+          </div>
+          <div className="mobile-avatar" title="Демо-аккаунт">{baseline.name.charAt(0).toUpperCase()}</div>
+          <button className="logout-btn" onClick={onExit} title="Выйти из демонстрации">← К входу</button>
+        </div>
+      </div>
+      {banner}
+      {tab === 'map' && (
+        <>
+          <MetabolismMap baseline={baseline} todayData={todayData} sim={sim} plan={plan}
+            hasAnyData={hasAnyData} goal={goal} foodLogs={foodLogs} activities={activities}
+            onOpenLogger={openLoggerNew} onGoToGoal={goToGoal} />
+          <ActivityHistory foodLogs={foodLogs} activities={activities}
+            onEdit={openLoggerEdit} onDelete={demoBlocked} />
+        </>
+      )}
+      {tab === 'goal' && (
+        <GoalTab baseline={baseline} tdee={todayData.tdee} goal={goal} plan={plan} onSetGoal={demoBlocked} />
+      )}
+      {tab === 'dishes' && (
+        <DishesTab dishes={dishes} onEditDish={demoBlocked} onDeleteDish={demoBlocked} onAddDish={demoBlocked} />
+      )}
+      {tab === 'journal' && (
+        <Journal history={history} goal={goal} baseline={baseline} sim={sim} todayData={todayData}
+          inbodyLogs={inbodyLogs} onEditInbody={demoBlocked} onDeleteInbody={demoBlocked} onAddInbody={demoBlocked} />
+      )}
+      {loggerOpen && <ActivityLogger baseline={baseline} editingEntry={editingEntry}
+        dishes={dishes} onClose={closeLogger} onSave={(e) => { demoBlocked(); closeLogger(); void e; }} />}
       {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
     </div>
   );
