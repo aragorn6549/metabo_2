@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 import { formatDayLabel, plural } from '@/lib/shared';
 import { entryEmoji, entryLabel, entryMeta, formatTime } from './entryMeta';
