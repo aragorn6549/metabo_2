@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import NumberInput from '@/components/NumberInput';
 
 function DishEditor({ dish, onSave, onClose }) {
   const isEdit = !!dish?.id;
