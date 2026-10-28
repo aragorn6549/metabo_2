@@ -3,8 +3,6 @@ import { useState, useRef } from 'react';
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
 
-// DECISION: страховка от «Cannot read properties of undefined (reading 'toFixed')» —
-// любое поле assessment (в т.ч. из старой/битой строки БД) приводится к числу; при NaN — fallback.
 const numOr = (v, d = 0) => { const n = +v; return Number.isFinite(n) ? n : d; };
 const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) ? n.toFixed(d) : fb; };
 
@@ -193,7 +191,5 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
     </div>
   );
 }
-
-// ============================================================
 
 export default GoalTab;
