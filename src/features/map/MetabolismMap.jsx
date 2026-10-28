@@ -1,6 +1,6 @@
 import { formatSigned, getContextText } from '@/lib/shared';
 import ProcessCard from './ProcessCard';
-import MacroRow from './MacroRow';
+import MacroRow, { FAT_HELP, MUSCLE_HELP } from './MacroRow';
 import Body3D from './Body3D';
 
 function MetabolismMap({ baseline, todayData, sim, plan, hasAnyData, goal,

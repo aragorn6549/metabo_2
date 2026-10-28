@@ -21,9 +21,9 @@ function MacroRow({ label, current, planned, color, unit='г' }) {
 }
 
 // ============================================================
-// HELP CONTENT
+// HELP CONTENT (экспортируется для MetabolismMap)
 // ============================================================
-const FAT_HELP = (
+export const FAT_HELP = (
   <>
     <h4 className="good">🔥 Жир сжигается больше (значение −)</h4>
     <ul>
@@ -41,7 +41,7 @@ const FAT_HELP = (
   </>
 );
 
-const MUSCLE_HELP = (
+export const MUSCLE_HELP = (
   <>
     <h4 className="synth">💪 Синтез больше (значение +)</h4>
     <ul>
