@@ -3,6 +3,11 @@ import { useState, useMemo } from 'react';
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
 
+// DECISION: страховка от «Cannot read properties of undefined (reading 'toFixed')» —
+// любое поле assessment (в т.ч. из старой/битой строки БД) приводится к числу; при NaN — fallback.
+const numOr = (v, d = 0) => { const n = +v; return Number.isFinite(n) ? n : d; };
+const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) ? n.toFixed(d) : fb; };
+
 // DECISION: вкладка «Цель» приведена строго 1:1 к прототипу (Презентация.html, GoalTab).
 // Отличия сборки были: лишние guard-условия в useMemo (скрывали нижний блок оценки, когда пример его показывает),
 // и двойная проверка instanceof Date для realisticDate. Guard оставлен только на самый ранний stage (!baseline/!tdee),
@@ -16,12 +21,13 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   });
   const assessment = useMemo(() => {
     if (targetValue === '' || !targetDate) return null;
-    if (!baseline || !tdee) return null; // данные ещё не прогрузились (в примере baseline всегда есть)
+    // DECISION: если данные ещё не прогрузились или baseline/tdee неполные (null fat_percent и т.п.),
+    // показываем сохранённую цель из БД (с числовыми fallback'ами), а не роняем экран.
+    if (!baseline || !tdee) {
+      return goal?.assessment ? { ...goal.assessment } : null;
+    }
     try {
       const a = assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
-      // DECISION: страховка от «Cannot read properties of undefined (reading 'toFixed')» —
-      // если из-за неполных данных baseline (например, fat_percent = null в БД) какое-то числовое
-      // поле не посчиталось, подменяем его 0 вместо падения всего экрана (ErrorBoundary).
       ['currentValue', 'dailyCalorieAdjustment', 'targetCalories', 'targetProtein',
        'targetFat', 'targetCarbs', 'daysAvailable'].forEach(k => {
         if (!Number.isFinite(+a[k])) a[k] = 0;
@@ -34,7 +40,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
       return a;
     } catch (e) {
       console.error('assessGoal:', e);
-      return null;
+      return goal?.assessment ? { ...goal.assessment } : null;
     }
   }, [targetType, targetValue, targetDate, baseline, tdee]);
   const handleSave = () => {
@@ -74,12 +80,12 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
             <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>{assessment.verdict}</div>
             <div className="goal-details">
               <div className="goal-detail"><div className="goal-detail-label">Сейчас</div>
-                <div className="goal-detail-value">{(Number.isFinite(+assessment.currentValue) ? +assessment.currentValue : 0).toFixed(1)}{assessment.targetUnit}</div></div>
+                <div className="goal-detail-value">{fmt(assessment.currentValue, 1)}{assessment.targetUnit}</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Цель</div>
-                <div className="goal-detail-value goal-color">{assessment.targetValue}{assessment.targetUnit}</div></div>
+                <div className="goal-detail-value goal-color">{fmt(assessment.targetValue, 1)}{assessment.targetUnit}</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Дневной {assessment.direction==='loss'?'дефицит':'профицит'}</div>
                 <div className={`goal-detail-value ${assessment.isFeasible?'ok':'warn'}`}>
-                  {assessment.dailyCalorieAdjustment>0?'+':''}{assessment.dailyCalorieAdjustment} ккал</div></div>
+                  {numOr(assessment.dailyCalorieAdjustment)>0?'+':''}{fmt(assessment.dailyCalorieAdjustment)} ккал</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Реалистичная дата</div>
                 <div className="goal-detail-value">
                   {(assessment.realisticDate ? new Date(assessment.realisticDate) : new Date())
@@ -97,13 +103,13 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <div className="stat-label" style={{ marginBottom: 10 }}>Дневные цели по КБЖУ</div>
               <div className="goal-details">
                 <div className="goal-detail"><div className="goal-detail-label">Калории</div>
-                  <div className="goal-detail-value goal-color">{assessment.targetCalories} ккал</div></div>
+                  <div className="goal-detail-value goal-color">{fmt(assessment.targetCalories)} ккал</div></div>
                 <div className="goal-detail"><div className="goal-detail-label">Белки</div>
-                  <div className="goal-detail-value">{assessment.targetProtein} г</div></div>
+                  <div className="goal-detail-value">{fmt(assessment.targetProtein)} г</div></div>
                 <div className="goal-detail"><div className="goal-detail-label">Жиры</div>
-                  <div className="goal-detail-value">{assessment.targetFat} г</div></div>
+                  <div className="goal-detail-value">{fmt(assessment.targetFat)} г</div></div>
                 <div className="goal-detail"><div className="goal-detail-label">Углеводы</div>
-                  <div className="goal-detail-value">{assessment.targetCarbs} г</div></div>
+                  <div className="goal-detail-value">{fmt(assessment.targetCarbs)} г</div></div>
               </div>
             </div>
             {plan && (Number.isFinite(+plan.fatPerDay) && +plan.fatPerDay > 0 || Number.isFinite(+plan.musclePerDay) && +plan.musclePerDay > 0) && (
