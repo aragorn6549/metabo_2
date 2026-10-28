@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 
 import { computePlanSeries, formatSigned } from '@/lib/shared';
 import ChartCard from './ChartCard';
+import LineChart from './LineChart';
 
 function ChartsView({ history, goal, baseline, sim, todayData }) {
   const [filter, setFilter] = useState('week');
@@ -25,7 +26,14 @@ function ChartsView({ history, goal, baseline, sim, todayData }) {
   }
   const fmt = d => new Date(d.date).toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
 
-  const currentDayEntry = sim && todayData && baseline ? {
+  // DECISION: «сегодня» добавляем только если ещё нет замера InBody на сегодня —
+  // иначе вчерашний замер ложно помечается как текущий и точка дублируется
+  const hasTodayInHistory = useMemo(() => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return history.some(h => String(h.date).slice(0, 10) === todayKey);
+  }, [history]);
+
+  const currentDayEntry = sim && todayData && baseline && !hasTodayInHistory ? {
     date: new Date().toISOString(),
     weight: baseline.weight, fatPercent: baseline.fatPercent, musclePercent: baseline.musclePercent,
     caloriesConsumed: todayData.caloriesConsumed, balance: todayData.balance,
@@ -94,9 +102,9 @@ function ChartsView({ history, goal, baseline, sim, todayData }) {
           <tbody>
             {allData.slice().reverse().map((d,i) => (
               <tr key={i}>
-                <td>{fmt(d)}</td><td>{d.weight.toFixed(1)}</td>
-                <td style={{ color:'#f97316' }}>{d.fatPercent.toFixed(1)}%</td>
-                <td style={{ color:'#3b82f6' }}>{d.musclePercent.toFixed(1)}%</td>
+                <td>{fmt(d)}</td><td>{(+d.weight || 0).toFixed(1)}</td>
+                <td style={{ color:'#f97316' }}>{(+d.fatPercent || 0).toFixed(1)}%</td>
+                <td style={{ color:'#3b82f6' }}>{(+d.musclePercent || 0).toFixed(1)}%</td>
                 <td>{Math.round(d.caloriesConsumed)}</td>
                 <td style={{ color:d.balance<0?'#f97316':'#22c55e' }}>{formatSigned(d.balance)}</td>
                 {hasLipidData && <>

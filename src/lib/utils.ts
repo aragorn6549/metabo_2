@@ -1,5 +1,12 @@
 function formatSigned(n, d=0) { return (n>=0?'+':'−') + Math.abs(n).toFixed(d); }
-const genId = () => Math.random().toString(36).slice(2, 10);
+// DECISION: id записей = uuid (колонки в Supabase — uuid; прошлый rand-генератор ломал PATCH/DELETE с ошибкой 22P02)
+const genId = () =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      });
 function formatTimer(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;

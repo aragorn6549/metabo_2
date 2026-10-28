@@ -12,6 +12,9 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   });
   const assessment = useMemo(() => {
     if (targetValue === '' || !targetDate) return null;
+    // baseline/tdee ещё не прогрузились — не считаем (иначе NaN/-Infinity и падение рендера)
+    if (!baseline || baseline.weight == null || baseline.fatPercent == null || baseline.musclePercent == null) return null;
+    if (!tdee || !isFinite(tdee)) return null;
     return assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
   }, [targetType, targetValue, targetDate, baseline, tdee]);
   const handleSave = () => {
@@ -59,12 +62,14 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
                   {assessment.dailyCalorieAdjustment>0?'+':''}{assessment.dailyCalorieAdjustment} ккал</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Реалистичная дата</div>
                 <div className="goal-detail-value">
-                  {assessment.realisticDate.toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})}</div></div>
+                  {(assessment.realisticDate instanceof Date ? assessment.realisticDate : new Date(assessment.realisticDate))
+                    .toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})}</div></div>
             </div>
             {!assessment.isFeasible && (
               <div className="goal-warning">
                 ⚠ {assessment.limitDescription}. Сдвиньте дату на{' '}
-                <strong>{assessment.realisticDate.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}</strong>{' '}
+                <strong>{(assessment.realisticDate instanceof Date ? assessment.realisticDate : new Date(assessment.realisticDate))
+                  .toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}</strong>{' '}
                 или менее амбициозную цель.
               </div>
             )}

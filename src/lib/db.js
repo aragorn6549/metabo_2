@@ -158,9 +158,12 @@ export async function fetchActiveGoal(uid) {
 export async function saveGoal(uid, goal) {
   // одна активная цель: предыдущие закрываем
   await supabase.from('goals').update({ status: 'completed' }).eq('user_id', uid).eq('status', 'active');
+  // DECISION: в assessment лежат Date-объекты (realisticDate/originalDate) — Postgres jsonb их не принимает,
+  // сериализуем в ISO-строки перед вставкой
+  const serialize = (a) => JSON.parse(JSON.stringify(a ?? {}, (k, v) => (v instanceof Date ? v.toISOString() : v)));
   const { data, error } = await supabase.from('goals').insert({
     user_id: uid, target_type: goal.targetType, target_value: goal.targetValue,
-    target_date: goal.targetDate, assessment: goal.assessment, status: 'active',
+    target_date: goal.targetDate, assessment: serialize(goal.assessment), status: 'active',
   }).select().single();
   if (error) throw error;
   return { id: data.id, targetType: data.target_type, targetValue: data.target_value,
