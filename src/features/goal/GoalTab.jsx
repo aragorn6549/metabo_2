@@ -34,23 +34,26 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   const hasGoalAssessment = !!goal?.assessment;
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
   const [localValue, setLocalValue] = useState(null);
-  // localValue != null — пользователь ввёл своё значение вручную (или нажал «Рассчитать»)
-  const manualInput = localValue != null;
 
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
 
-  const baselineKey = `${baseline?.id ?? ''}|${baseline?.date ?? ''}`;
-  const syncedForRef = useRef(null);
-  const syncKey = `${hasGoalAssessment ? 'g' : '-'}|${targetType}|${baselineKey}`;
-  if (syncedForRef.current !== syncKey) {
-    syncedForRef.current = syncKey;
+  // DECISION: сброс ручного ввода — только при смене ПАРАМЕТРА или появлении НОВОГО замера
+  // (baseline.id изменился). Раньше ключ включал baseline.date, а у каждого замера он новый —
+  // любое касание стора (сохранение цели/замера → пересоздание объекта baseline) сбрасывало
+  // поле обратно на значение из InBody, и «подстановка не работала» с точки зрения пользователя.
+  const prevTypeRef = useRef(targetType);
+  const prevLogIdRef = useRef(baseline?.id ?? null);
+  if (prevTypeRef.current !== targetType || prevLogIdRef.current !== (baseline?.id ?? null)) {
+    prevTypeRef.current = targetType;
+    prevLogIdRef.current = baseline?.id ?? null;
     setLocalValue(null); // сброс ручного ввода → фолбэк на актуальный замер/цель
   }
   const targetValue = (() => {
-    if (manualInput) return String(localValue);
+    // localValue != null — ручной ввод пользователя (в т.ч. «0»); пустая строка = поле очищено.
+    if (localValue != null && localValue !== '') return String(localValue);
     if (hasGoalAssessment && goal?.targetValue != null) return String(+goal.targetValue);
     return baselineValueFor(targetType); // цель не задана — значение из последнего замера
   })();
@@ -112,7 +115,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="musclePercent">% мышц</option>
             </select></div>
           <div className="field"><label>Значение ({unit})</label>
-            <NumberInput value={targetValue} onChange={(v) => setLocalValue(v === "" || (Number.isFinite(+v) && +v === 0) ? null : v)} placeholder="—" /></div>
+            <NumberInput value={targetValue} onChange={(v) => setLocalValue(v === "" ? null : v)} placeholder="—" /></div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
