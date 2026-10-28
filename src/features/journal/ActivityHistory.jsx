@@ -3,6 +3,8 @@ import { useState, useMemo } from 'react';
 import { formatDayLabel, plural } from '@/lib/shared';
 import { entryEmoji, entryLabel, entryMeta, formatTime } from './entryMeta';
 
+const TYPE_TITLES = { food: '🍽 Питание', workout: '🏋️ Тренировки', sleep: '😴 Сон', other: '🚶 Прочая активность' };
+
 function ActivityHistory({ foodLogs, activities, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState({});
 
