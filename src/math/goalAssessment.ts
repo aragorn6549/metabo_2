@@ -29,8 +29,14 @@ export function computePlan(goal, baseline, foodLogs, activities) {
   }
   if (musclePerDay <= 0) {
     // целевой дневной энергобаланс = dailyCalorieAdjustment (дефицит/профицит относительно TDEE)
-    const bal = goal.assessment.dailyCalorieAdjustment || 0;
-    const sim = simulateDay(foodLogs || [], activities || [], bal);
+    // DECISION: защита от битых строк БД — если значения не числа, берём targetCalories − energyExpenditure
+    const a = goal.assessment;
+    let bal = Number(a.dailyCalorieAdjustment);
+    if (!isFinite(bal)) {
+      const tc = Number(a.targetCalories), ee = Number(a.energyExpenditure);
+      bal = (isFinite(tc) && isFinite(ee)) ? tc - ee : 0;
+    }
+    const sim = simulateDay(foodLogs || [], activities || [], bal || 0);
     if (sim && isFinite(sim.muscleToday)) musclePerDay = Math.max(0, sim.muscleToday);
   }
   return { fatPerDay, musclePerDay, days };
@@ -112,9 +118,15 @@ function assessGoal({ targetType, targetValue, targetDate, baseline, tdee }) {
   const days = Math.max(1, Math.ceil((end-now)/86400000));
   const weeks = days/7, months = days/30.4, cw = baseline.weight;
   let cur, delta, unit;
+  // DECISION: baseline может прийти из БД с null-полями (fat_percent/muscle_percent не заполнены) —
+  // без fallback здесь cur/delta становились undefined и весь рендер падал на «undefined.toFixed».
+  const bWeight = Number(baseline?.weight);
+  const bFat = Number(baseline?.fatPercent);
+  const bMuscle = Number(baseline?.musclePercent);
+  const cw = isFinite(bWeight) ? bWeight : 0;
   if (targetType==='weight') { cur=cw; delta=targetValue-cw; unit='кг'; }
-  else if (targetType==='fatPercent') { cur=baseline.fatPercent; delta=targetValue-baseline.fatPercent; unit='%'; }
-  else { cur=baseline.musclePercent; delta=targetValue-baseline.musclePercent; unit='%'; }
+  else if (targetType==='fatPercent') { cur=isFinite(bFat)?bFat:0; delta=targetValue-cur; unit='%'; }
+  else { cur=isFinite(bMuscle)?bMuscle:0; delta=targetValue-cur; unit='%'; }
   const dir = delta<0?'loss':delta>0?'gain':'maintain';
   let weekly, monthly, feasible, verdict, limitDesc;
   if (targetType==='weight'||targetType==='fatPercent') {

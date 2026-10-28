@@ -1,6 +1,7 @@
 // DECISION: слой доступа к данным (ТЗ §5, §8). Supabase = источник истины.
 // timestamp в БД — timestamptz; наружу отдаём unix ms (как ожидает математика из прототипа).
 import { supabase } from '@/lib/supabase';
+import { assessGoal } from '@/math/goalAssessment';
 
 const toMs = (s) => (s ? new Date(s).getTime() : 0);
 const toIso = (ms) => new Date(ms).toISOString();
@@ -221,10 +222,37 @@ function repairAssessment(a, goalRow, baseline, gRow = {}) {
   }
   if (num(src.dailyCalorieAdjustment) === undefined) out.dailyCalorieAdjustment = 0;
   if (num(src.daysAvailable) === undefined) out.daysAvailable = 1;
+  if (num(src.energyExpenditure) === undefined) {
+    // восстановление TDEE из baseline (для computePlan и корректного ремонта калорий)
+    const bmr = num(baseline?.bmr);
+    if (bmr !== undefined && isFinite(bmr)) {
+      const mult = { sedentary: 1.2, light: 1.375, moderate: 1.55, high: 1.725, athlete: 1.9 }[baseline?.activityLevel] ?? 1.2;
+      out.energyExpenditure = Math.round(bmr * mult);
+    }
+  }
   if (num(src.targetCalories) === undefined) out.targetCalories = num(baseline?.bmr) ?? 0;
   if (num(src.targetProtein) === undefined) out.targetProtein = 0;
   if (num(src.targetFat) === undefined) out.targetFat = 0;
   if (num(src.targetCarbs) === undefined) out.targetCarbs = 0;
+  // DECISION: если assessment в БД битая/пустая (старые мигрированные строки), НЕ чиним её нулями —
+  // вместо этого пересчитываем целиком через assessGoal по актуальным baseline/tdee.
+  // Это гарантирует полноценную оценку на вкладке «Цель» (раньше показывались нули).
+  if (src.repaired !== true && (num(src.targetCalories) <= 0 || num(src.targetProtein) <= 0)) {
+    try {
+      const tdee = num(out.energyExpenditure) ?? (num(baseline?.bmr) ? num(baseline.bmr) * 1.2 : null);
+      // DECISION: targetDate из БД может быть «в прошлом» (цель не обновляли давно) —
+      // в этом случае пересчитываем оценку на ту же дату, но отсчитывая дни от неё корректно:
+      // assessGoal сам ограничивает снизу 1 днём, поэтому дата просто даст «daysAvailable=1».
+      const td = gRow.targetDate || src.originalDate || src.realisticDate;
+      if (baseline && tdee && td) {
+        const fresh = assessGoal({
+          targetType: out.targetType, targetValue: out.targetValue,
+          targetDate: td, baseline, tdee,
+        });
+        return { ...fresh, repaired: true };
+      }
+    } catch (e) { console.warn('repairAssessment: recompute failed', e); }
+  }
   if (typeof src.isFeasible !== 'boolean') out.isFeasible = true;
   if (typeof src.verdict !== 'string') out.verdict = '';
   if (typeof src.limitDescription !== 'string') out.limitDescription = '';
@@ -240,7 +268,7 @@ function normalizeGoalRow(g, baseline = null) {
   }
   return { id: g.id, targetType, targetValue,
     targetDate: g.target_date,
-    assessment: repairAssessment(g.assessment, targetType, baseline, { targetValue }),
+    assessment: repairAssessment(g.assessment, targetType, baseline, { targetValue, targetDate: g.target_date }),
     createdAt: toMs(g.created_at) };
 }
 
