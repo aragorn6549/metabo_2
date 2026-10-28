@@ -17,7 +17,25 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   const assessment = useMemo(() => {
     if (targetValue === '' || !targetDate) return null;
     if (!baseline || !tdee) return null; // данные ещё не прогрузились (в примере baseline всегда есть)
-    return assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
+    try {
+      const a = assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
+      // DECISION: страховка от «Cannot read properties of undefined (reading 'toFixed')» —
+      // если из-за неполных данных baseline (например, fat_percent = null в БД) какое-то числовое
+      // поле не посчиталось, подменяем его 0 вместо падения всего экрана (ErrorBoundary).
+      ['currentValue', 'dailyCalorieAdjustment', 'targetCalories', 'targetProtein',
+       'targetFat', 'targetCarbs', 'daysAvailable'].forEach(k => {
+        if (!Number.isFinite(+a[k])) a[k] = 0;
+      });
+      if (typeof a.verdict !== 'string' || !a.verdict) {
+        a.verdict = a.isFeasible ? 'Реалистично' : 'Слишком агрессивно';
+      }
+      if (typeof a.limitDescription !== 'string') a.limitDescription = '';
+      if (!a.targetUnit) a.targetUnit = targetType === 'weight' ? 'кг' : '%';
+      return a;
+    } catch (e) {
+      console.error('assessGoal:', e);
+      return null;
+    }
   }, [targetType, targetValue, targetDate, baseline, tdee]);
   const handleSave = () => {
     if (!assessment) return;
@@ -56,7 +74,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
             <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>{assessment.verdict}</div>
             <div className="goal-details">
               <div className="goal-detail"><div className="goal-detail-label">Сейчас</div>
-                <div className="goal-detail-value">{assessment.currentValue.toFixed(1)}{assessment.targetUnit}</div></div>
+                <div className="goal-detail-value">{(Number.isFinite(+assessment.currentValue) ? +assessment.currentValue : 0).toFixed(1)}{assessment.targetUnit}</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Цель</div>
                 <div className="goal-detail-value goal-color">{assessment.targetValue}{assessment.targetUnit}</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Дневной {assessment.direction==='loss'?'дефицит':'профицит'}</div>
@@ -88,17 +106,17 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
                   <div className="goal-detail-value">{assessment.targetCarbs} г</div></div>
               </div>
             </div>
-            {plan && (plan.fatPerDay > 0 || plan.musclePerDay > 0) && (
+            {plan && (Number.isFinite(+plan.fatPerDay) && +plan.fatPerDay > 0 || Number.isFinite(+plan.musclePerDay) && +plan.musclePerDay > 0) && (
               <div style={{ borderTop:'1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
                 <div className="stat-label" style={{ marginBottom: 10 }}>Дневные планы по составу тела</div>
                 <div className="goal-details">
-                  {plan.fatPerDay > 0 && (
+                  {Number.isFinite(+plan.fatPerDay) && plan.fatPerDay > 0 && (
                     <div className="goal-detail"><div className="goal-detail-label">Сжигание жира</div>
-                      <div className="goal-detail-value" style={{ color: 'var(--muscle-2)' }}>−{plan.fatPerDay.toFixed(0)} г/день</div></div>
+                      <div className="goal-detail-value" style={{ color: 'var(--muscle-2)' }}>−{(+plan.fatPerDay).toFixed(0)} г/день</div></div>
                   )}
-                  {plan.musclePerDay > 0 && (
+                  {Number.isFinite(+plan.musclePerDay) && plan.musclePerDay > 0 && (
                     <div className="goal-detail"><div className="goal-detail-label">Синтез мышц</div>
-                      <div className="goal-detail-value" style={{ color: 'var(--muscle)' }}>+{plan.musclePerDay.toFixed(1)} г/день</div></div>
+                      <div className="goal-detail-value" style={{ color: 'var(--muscle)' }}>+{(+plan.musclePerDay).toFixed(1)} г/день</div></div>
                   )}
                   <div className="goal-detail"><div className="goal-detail-label">Дней до цели</div>
                     <div className="goal-detail-value">{assessment.daysAvailable}</div></div>
