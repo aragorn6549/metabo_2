@@ -310,6 +310,9 @@
   .close-btn { background: var(--bg-3); border: 1px solid var(--border); color: var(--muted);
     width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; }
   .close-btn:hover { color: var(--text); }
+  .logout-btn { background: var(--bg-3); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .logout-btn:hover { color: #ef4444; border-color: #ef4444; }
   .logger-tabs { display: flex; gap: 4px; padding: 16px 24px 0; overflow-x: auto; }
   .logger-tab { padding: 10px 16px; border-radius: 10px; background: transparent; border: none;
     color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;

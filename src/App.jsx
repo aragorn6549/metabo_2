@@ -215,7 +215,7 @@ export default function App() {
           <div className="mobile-avatar" style={{ cursor: 'pointer' }} title={userEmail}>
             {(baseline.name || userEmail).charAt(0).toUpperCase()}
           </div>
-          <button className="close-btn" onClick={handleLogout} title="Выйти">⏻</button>
+          <button className="logout-btn" onClick={handleLogout} title="Выйти из аккаунта">⏻ Выйти</button>
         </div>
       </div>
       {tab === 'map' && todayData && (
