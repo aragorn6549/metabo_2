@@ -57,13 +57,19 @@ export function useMetaboStore(user) {
 
   // ---------- actions (оптимистичные + запись в Supabase) ----------
   const saveEntry = async (entry) => {
+    // DECISION: id генерируем только для НОВЫХ локальных записей. Для записи, уже сохранённой в Supabase
+    // (uuid из БД), переиспользуем entry.id — иначе PATCH .eq('id', сгенерированного-id) не находит строку.
     const e = { ...entry, id: entry.id || genId() };
     const isFood = e.type === 'food';
     const setter = isFood ? setFoodLogs : setActivities;
     setter(prev => [...prev.filter(x => x.id !== e.id), e]);
     try {
       if (entry.id) await db.updateEntry(uid, entry.id, e);
-      else await db.insertEntry(uid, e);
+      else {
+        const saved = await db.insertEntry(uid, e);
+        // синхронизируем локальный rand/uuid-id с реальным uuid строки из БД
+        setter(prev => prev.map(x => (x.id === e.id ? saved : x)));
+      }
     } catch (err) { console.error(err); invalidate(); }
     // синхронизация новых блюд в справочник (как в прототипе)
     if (isFood && !entry.id && e.name && e.name.trim()) {
@@ -109,6 +115,7 @@ export function useMetaboStore(user) {
   const saveInbody = async (entry) => {
     try {
       const saved = await db.upsertInBodyLog(uid, entry);
+      // DECISION: в БД id — uuid; локальный rand-id из редактора заменяем на реальный uuid строки
       const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
       applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
     } catch (err) { console.error(err); }
