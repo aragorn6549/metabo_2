@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 
+import { formatTimer } from '@/lib/shared';
 import MiniSparkline from './MiniSparkline';
 
 function ProcessCard({ 
