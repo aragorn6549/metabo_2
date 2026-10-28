@@ -22,6 +22,8 @@ function MetabolismMap({ baseline, todayData, sim, plan, hasAnyData, goal,
   const fatPlanDisplay = plan?.fatPerDay ? -plan.fatPerDay : 0;
 
   const muscleDisplayRate = sim ? sim.currentMuscle : 0;
+  // DECISION: рядом с фигурой и в карточке показываем чистый баланс мышц за день —
+  // раньше выводился только положительный MPS, поэтому при netMuscle < 0 значение не отображалось
   const muscleDisplayToday = sim ? sim.muscleToday : 0;
   const musclePlanDisplay = plan?.musclePerDay || 0;
 
@@ -31,6 +33,13 @@ function MetabolismMap({ baseline, todayData, sim, plan, hasAnyData, goal,
   const sparklineMuscle = sim ? sim.snapshots.slice(-24).map(s => ({
     hour: s.hour, value: s.netMuscle
   })) : null;
+
+  const muscleDetail = sim ? (
+    <>
+      <span>🟢 синтез (MPS): <strong>{sim.currentMps.toFixed(2)}</strong> г/ч</span>
+      <span>🔴 распад (MPB): <strong>{sim.currentMpb.toFixed(2)}</strong> г/ч</span>
+    </>
+  ) : null;
 
   const fatDetail = sim ? (
     <>
@@ -71,6 +80,7 @@ function MetabolismMap({ baseline, todayData, sim, plan, hasAnyData, goal,
               context={context}
               sparklineData={sparklineMuscle}
               helpContent={MUSCLE_HELP}
+              muscleDetail={muscleDetail}
             />
           </div>
         ) : (

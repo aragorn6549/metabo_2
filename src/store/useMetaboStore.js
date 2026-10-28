@@ -113,12 +113,12 @@ export function useMetaboStore(user) {
   };
 
   const saveInbody = async (entry) => {
-    try {
-      const saved = await db.upsertInBodyLog(uid, entry);
-      // DECISION: в БД id — uuid; локальный rand-id из редактора заменяем на реальный uuid строки
-      const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
-      applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
-    } catch (err) { console.error(err); }
+    // DECISION: бросаем ошибку наверх — UI покажет честный toast вместо ложного «✓ добавлен»
+    const saved = await db.upsertInBodyLog(uid, entry);
+    // локальный rand-id из редактора заменяем на реальный uuid строки из БД
+    const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
+    applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
+    return saved;
   };
 
   const deleteInbody = async (entry) => {
@@ -133,7 +133,7 @@ export function useMetaboStore(user) {
     try {
       const saved = await db.saveGoal(uid, g);
       setGoal(saved);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error('saveGoal:', err); throw err; }
   };
 
   const updateBaseline = async (data) => {
@@ -202,7 +202,13 @@ export function useMetaboStore(user) {
     return simulateDay(foodLogs, activities, todayData.balance);
   }, [foodLogs, activities, todayData?.balance, tick]);
 
-  const plan = useMemo(() => computePlan(goal, baseline), [goal, baseline]);
+  // DECISION: plan считается по симуляции за последние 7 дней (стабильный прогноз синтеза мышц),
+  // а не по «50% от привеса» — иначе блок рядом с фигурой пустовал при похудении.
+  const plan = useMemo(() => {
+    const recentFoods = foodLogs.filter(f => f.timestamp >= Date.now() - 7*86400e3);
+    const recentActs = activities.filter(a => a.timestamp >= Date.now() - 7*86400e3);
+    return computePlan(goal, baseline, recentFoods, recentActs);
+  }, [goal, baseline, foodLogs, activities]);
 
   return {
     loading, baseline, foodLogs, activities, dishes, goal, history, inbodyLogs,

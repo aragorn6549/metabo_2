@@ -46,11 +46,16 @@ create table if not exists public.dishes (
 );
 
 -- 4. Цели
+-- DECISION: типы целей приложения — weight | fatPercent | musclePercent (GoalTab).
+-- Старый CHECK ('weight','fatPercent','muscleMass','recomposition') не совпадал с ними,
+-- из-за чего вставка цели падала с 400 (23514) и вкладка «Цель» не работала вовсе.
 create table if not exists public.goals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  target_type text not null check (target_type in ('weight','fatPercent','muscleMass','recomposition')),
-  target_value numeric not null,
+  goal_type text not null check (goal_type in ('weight','fatPercent','musclePercent')),
+  target_weight_kg numeric,        -- значение цели по типу (одна из колонок заполнена)
+  target_fat_pct numeric,
+  target_muscle_pct numeric,
   target_date date not null,
   assessment jsonb not null default '{}'::jsonb,  -- результат assessGoal (ТЗ §6)
   status text not null default 'active' check (status in ('active','completed','cancelled')),

@@ -61,7 +61,10 @@ function computeHourlyRate(hour, dayStartTs, foodLogs, activities, calorieBalanc
     trainingBoost = Math.max(trainingBoost, 0.7 + 1.5 * Math.exp(-hoursSince / 10));
   }
   const sleepFactor = isSleepingHour ? 0.15 : 1.0;
-  const energyFactor = calorieBalance < 0 ? 0.5 : 1.0;
+  // DECISION: энергетический фактор плавный (был жёсткий переключатель 0.5 при любом дефиците —
+  // netMuscle почти всегда выходил отрицательным и блок «синтез мышц» не отображался).
+  // При лёгком дефиците MPS сохраняется; сильный дефицит гасит синтез до ~0.45.
+  const energyFactor = calorieBalance >= 0 ? 1.0 : Math.max(0.45, 1 - Math.abs(calorieBalance) / 1200);
   const mps = (baseMps + mealMps) * trainingBoost * sleepFactor * energyFactor;
   let mpb = 0.06;
   if (isSleepingHour) mpb = 0.13;
@@ -75,7 +78,7 @@ function computeHourlyRate(hour, dayStartTs, foodLogs, activities, calorieBalanc
   if (fastingHours > 9) mpb *= 1.15;
   const netMuscle = mps - mpb;
 
-  return { lipolysis, esterification, netFatFlux, netMuscle };
+  return { lipolysis, esterification, netFatFlux, netMuscle, mps, mpb };
 }
 
 function simulateDay(foodLogs, activities, calorieBalance) {
@@ -102,13 +105,15 @@ function simulateDay(foodLogs, activities, calorieBalance) {
     }
   }
   const current = snapshots[snapshots.length - 1] || {
-    lipolysis: 0, esterification: 0, netFatFlux: 0, netMuscle: 0
+    lipolysis: 0, esterification: 0, netFatFlux: 0, netMuscle: 0, mps: 0, mpb: 0
   };
   return {
     currentLipolysis: current.lipolysis,
     currentEsterification: current.esterification,
     currentNetFatFlux: current.netFatFlux,
     currentMuscle: current.netMuscle,
+    currentMps: current.mps ?? 0,
+    currentMpb: current.mpb ?? 0,
     netFatToday, fatOxidized, fatStored, muscleToday,
     currentHour, snapshots
   };

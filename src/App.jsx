@@ -98,9 +98,14 @@ export default function App() {
     showToast('Удалено', 'danger');
   };
 
-  const handleSetGoal = (g) => {
-    store.setGoal(g);
-    showToast(`🎯 Цель: ${g.targetValue}${g.assessment?.targetUnit || ''}`, 'goal');
+  const handleSetGoal = async (g) => {
+    try {
+      await store.setGoal(g);
+      showToast(`🎯 Цель: ${g.targetValue}${g.assessment?.targetUnit || ''}`, 'goal');
+    } catch (err) {
+      console.error('setGoal:', err);
+      showToast('⚠ Не удалось сохранить цель: ' + (err?.message || 'ошибка БД'), 'danger');
+    }
   };
 
   const openDishEditor = (dish) => { setDishEditorDish(dish); setDishEditorOpen(true); };
@@ -118,10 +123,16 @@ export default function App() {
   const openInbodyEditorNew = () => { setInbodyEditorEntry(null); setInbodyEditorOpen(true); };
   const openInbodyEditorEdit = (entry) => { setInbodyEditorEntry(entry); setInbodyEditorOpen(true); };
   const closeInbodyEditor = () => { setInbodyEditorOpen(false); setInbodyEditorEntry(null); };
-  const handleSaveInbody = (entry) => {
-    store.saveInbody(entry);
-    showToast(entry.id ? '✓ Замер обновлён' : '✓ Замер добавлен');
-    closeInbodyEditor();
+  const handleSaveInbody = async (entry) => {
+    // DECISION: ждём фактической записи в Supabase — toast «обновлён/добавлен» больше не врёт при ошибке БД
+    try {
+      await store.saveInbody(entry);
+      showToast(entry.id ? '✓ Замер обновлён' : '✓ Замер добавлен');
+      closeInbodyEditor();
+    } catch (err) {
+      console.error('saveInbody:', err);
+      showToast('⚠ Не удалось сохранить замер: ' + (err?.message || 'ошибка БД'), 'danger');
+    }
   };
   const handleDeleteInbody = (entry) => {
     store.deleteInbody(entry);
