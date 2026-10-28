@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
@@ -14,13 +14,32 @@ const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) 
 // Графа «Сейчас» берётся напрямую из замера InBody (baseline); «Цель», «Дневной профицит»,
 // «Реалистичная дата», КБЖУ — прочерк. Расчёт и вердикт появляются только после «Рассчитать».
 function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
+  // DECISION: без сохранённой цели поле «Значение» (goal-detail-value) подставляется
+  // из последнего (или единственного) замера InBody по выбранному параметру.
+  const baselineValueFor = (t) => {
+    if (!baseline) return '';
+    const v = t === 'weight' ? baseline.weight
+      : t === 'fatPercent' ? baseline.fatPercent
+      : baseline.musclePercent;
+    const n = +v;
+    return Number.isFinite(n) ? String(+n.toFixed(1)) : '';
+  };
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
-  // DECISION: без сохранённой цели поле «Значение» пустое (placeholder «—»), а не магическая 72.
-  const [targetValue, setTargetValue] = useState(goal?.targetValue ?? '');
+  const [targetValue, setTargetValue] = useState(() => goal?.targetValue ?? baselineValueFor(goal?.targetType || 'weight'));
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
+
+  // DECISION: если цель не задана — поле «Значение» всегда отражает последний замер;
+  // при смене параметра (вес / % жира / % мышц) подставляем значение из baseline.
+  // Если пользователь уже поставил цель (есть assessment) — его вводимые значения не трогаем.
+  useEffect(() => {
+    if (!goal?.assessment) {
+      setTargetValue(baselineValueFor(targetType));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetType, goal?.assessment]);
   // Локальная оценка считается ТОЛЬКО по кнопке «Рассчитать» (не на каждый ввод).
   const [localAssessment, setLocalAssessment] = useState(null);
   const effectiveAssessment = localAssessment ?? goal?.assessment ?? null;
