@@ -44,5 +44,6 @@ function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpe
       </div>
     </div>
   );
+}
 
 export default MobileProfile;

@@ -114,10 +114,18 @@ export default function App() {
     showToast('Замер удалён', 'danger');
   };
 
+  const handleOnboardingComplete = async (data) => {
+    await store.updateBaseline(data); // profiles + первый inbody_log на сегодня (ТЗ §5.2)
+    const wasEditing = editingBaseline; // baseline уже пересчитается из стора после сохранения
+    setEditingBaseline(false);
+    showToast(wasEditing ? '✓ Данные обновлены' : '👋 Добро пожаловать!');
+  };
+
   if (!authChecked) return <div className="app" />;
   if (!user) return <AuthScreen />;
   if (!baseline || editingBaseline) {
-    return <OnboardingScreen initial={baseline} onComplete={() => setEditingBaseline(false)}
+    return <OnboardingScreen key={editingBaseline ? 'edit' : 'new'} initial={baseline}
+      onComplete={handleOnboardingComplete}
       onCancel={baseline ? () => setEditingBaseline(false) : null} />;
   }
   if (store.loading) return <div className="app"><div className="empty-state">Загрузка…</div></div>;

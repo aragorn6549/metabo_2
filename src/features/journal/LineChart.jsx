@@ -69,5 +69,7 @@ function LineChart({ data, color='#8b5cf6', height=200, id, goalLine, planData }
         </g>
       ))}
     </svg>
+  );
+}
 
 export default LineChart;

@@ -148,5 +148,6 @@ function Body3D({ fatIntensity, muscleIntensity, lipogenesisIntensity, netFatTod
       <div className="drag-hint">⟲ потяни, чтобы повернуть</div>
     </div>
   );
+}
 
 export default Body3D;

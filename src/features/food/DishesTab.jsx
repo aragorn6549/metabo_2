@@ -51,5 +51,7 @@ function DishesTab({ dishes, onEditDish, onDeleteDish, onAddDish }) {
         </div>
       )}
     </div>
+  );
+}
 
 export default DishesTab;

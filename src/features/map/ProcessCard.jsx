@@ -178,5 +178,6 @@ function ProcessCard({
       </div>
     </div>
   );
+}
 
 export default ProcessCard;

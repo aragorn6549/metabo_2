@@ -15,5 +15,7 @@ function ChartCard({ title, subtitle, data, color, id, goalLine, planData }) {
       </div>
       <LineChart id={id} data={data} color={color} goalLine={goalLine} planData={planData} />
     </div>
+  );
+}
 
 export default ChartCard;
