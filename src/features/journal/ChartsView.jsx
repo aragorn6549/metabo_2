@@ -109,5 +109,7 @@ function ChartsView({ history, goal, baseline, sim, todayData }) {
         </table>
       </div>
     </div>
+  );
+}
 
 export default ChartsView;

@@ -9,5 +9,7 @@ function HelpTab() {
       </div>
       <HelpContent />
     </div>
+  );
+}
 
 export default HelpTab;
