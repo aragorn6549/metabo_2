@@ -1,59 +1,78 @@
--- supabase/fix_migrate_goals.sql
--- Исправленная миграция для таблицы goals, устойчивая к отсутствующей колонке status
+-- ============================================================
+-- MetaBo · миграция таблицы goals (v2, безопасная)
+-- Выполнить в Supabase Dashboard → SQL Editor → Run (один раз)
+-- Все шаги идемпотентны, можно запускать повторно.
+-- ============================================================
 
-DO $$ 
-BEGIN
-    -- 1. Если таблица goals существует, но имеет старую структуру (нет target_type/target_value/target_date), пересоздаём её
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'goals' AND column_name = 'target_type') THEN
-        RAISE NOTICE 'Таблица goals уже имеет новую структуру. Миграция не требуется.';
-    ELSE
-        -- Проверяем, есть ли старые данные, которые нужно сохранить
-        IF EXISTS (SELECT 1 FROM goals) THEN
-            RAISE WARNING 'Обнаружены данные в goals со старой структурой. Они будут потеряны. Создаём резервную копию...';
-            CREATE TABLE IF NOT EXISTS goals_backup_old AS SELECT * FROM goals;
-        END IF;
+begin;
 
-        -- Удаляем старую таблицу и создаём новую
-        DROP TABLE IF EXISTS goals CASCADE;
-        
-        CREATE TABLE goals (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW(),
-            
-            -- Новая схема целей
-            target_type TEXT CHECK (target_type IN ('weight', 'fatPercent', 'musclePercent')),
-            target_value NUMERIC(5,2),
-            target_date DATE,
-            assessment JSONB,
-            
-            -- Статус цели (активна/завершена) — теперь всегда присутствует
-            status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled'))
-        );
+-- 1. Колонки новой схемы (значение цели хранится по типу в отдельной колонке)
+alter table public.goals
+  add column if not exists goal_type text,
+  add column if not exists target_weight_kg numeric,
+  add column if not exists target_fat_pct numeric,
+  add column if not exists target_muscle_pct numeric,
+  add column if not exists status text default 'active';
 
-        -- Индексы для производительности
-        CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id);
-        CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
-        CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals(created_at DESC);
+-- 2. Перенос данных из старых колонок target_type/target_value (если они ещё есть)
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='goals' and column_name='target_type') then
+    update public.goals set goal_type = target_type where goal_type is null;
+  end if;
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='goals' and column_name='target_value') then
+    update public.goals set target_weight_kg = target_value where goal_type = 'weight'     and target_weight_kg is null;
+    update public.goals set target_fat_pct   = target_value where goal_type = 'fatPercent' and target_fat_pct is null;
+    -- старые значения muscleMass/recomposition трактуем как % мышц
+    update public.goals set target_muscle_pct = target_value where goal_type in ('musclePercent','muscleMass','recomposition') and target_muscle_pct is null;
+  end if;
+end $$;
 
-        RAISE NOTICE 'Таблица goals пересоздана с новой структурой.';
-    END IF;
-END $$;
+-- 3. Нормализация типов и дефолты
+update public.goals set goal_type = 'musclePercent' where goal_type in ('muscleMass','recomposition');
+update public.goals set goal_type = 'weight'        where goal_type is null;
+update public.goals set status    = 'active'        where status is null or status not in ('active','completed','cancelled');
 
--- 2. Убедимся, что RLS политики настроены правильно
-ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
+-- 4. Удаляем старый CHECK и устаревшие колонки
+alter table public.goals drop constraint if exists goals_target_type_check;
+alter table public.goals drop column if exists target_type;
+alter table public.goals drop column if exists target_value;
 
-DROP POLICY IF EXISTS "Users can view own goals" ON goals;
-CREATE POLICY "Users can view own goals" ON goals FOR SELECT USING (auth.uid() = user_id);
+-- 5. Новый CHECK + NOT NULL (повторный запуск безопасен — игнорируем «уже существует»)
+do $$
+begin
+  alter table public.goals
+    alter column goal_type set not null,
+    alter column status set not null,
+    alter column status set default 'active',
+    add constraint goals_goal_type_check check (goal_type in ('weight','fatPercent','musclePercent')),
+    add constraint goals_status_check check (status in ('active','completed','cancelled'));
+exception when duplicate_object or duplicate_table or invalid_table_definition then
+  null; -- ограничения уже добавлены предыдущим запуском
+end $$;
 
-DROP POLICY IF EXISTS "Users can insert own goals" ON goals;
-CREATE POLICY "Users can insert own goals" ON goals FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- 6. Индекс (после того, как status точно существует)
+create index if not exists goals_user_status_idx on public.goals (user_id, status);
 
-DROP POLICY IF EXISTS "Users can update own goals" ON goals;
-CREATE POLICY "Users can update own goals" ON goals FOR UPDATE USING (auth.uid() = user_id);
+-- 7. RLS
+alter table public.goals enable row level security;
 
-DROP POLICY IF EXISTS "Users can delete own goals" ON goals;
-CREATE POLICY "Users can delete own goals" ON goals FOR DELETE USING (auth.uid() = user_id);
+drop policy if exists "goals_select_own" on public.goals;
+create policy "goals_select_own" on public.goals
+  for select using (auth.uid() = user_id);
 
-RAISE NOTICE 'Миграция goals завершена.';
+drop policy if exists "goals_insert_own" on public.goals;
+create policy "goals_insert_own" on public.goals
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "goals_update_own" on public.goals;
+create policy "goals_update_own" on public.goals
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "goals_delete_own" on public.goals;
+create policy "goals_delete_own" on public.goals
+  for delete using (auth.uid() = user_id);
+
+commit;
