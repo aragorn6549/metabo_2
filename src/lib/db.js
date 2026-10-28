@@ -123,24 +123,35 @@ export async function fetchInBodyLogs(uid) {
     musclePercent: r.muscle_percent, bmr: r.bmr, bmi: r.bmi,
   }));
 }
+// UUID v4 (строгий): только он валиден для колонки uuid в Supabase/Postgres.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function upsertInBodyLog(uid, log) {
   const row = {
     user_id: uid, measured_at: log.date.includes?.('T') ? log.date : new Date(log.date).toISOString(),
     weight_kg: log.weight, fat_percent: log.fatPercent, muscle_percent: log.musclePercent,
     bmr: Math.round(log.bmr), bmi: log.bmi ?? null,
   };
-  // DECISION: id строки генерирует Postgres (default gen_random_uuid()).
-  // Локальный rand-id из редактора НЕ пересылаем — иначе в колонку uuid попадает не-uuid
-  // и PATCH/POST падает с 400 (22P02) / 406.
+  // DECISION (исправление бага 406 + «Cannot read properties of undefined (reading 'toFixed')»):
+  // раньше при логированном id делался только PATCH (.eq('id', ...) без .select()), и если строки
+  // с таким id в БД нет (локальный id из редактора или id, удалённый в другой сессии), Supabase
+  // возвращал 406 PGRST116, а upsert бросал ошибку ДО обновления локального состояния.
+  // В итоге inbodyLogs оставался пустым/без замера, baseline = null, план по цели не пересчитывался,
+  // и GoalTab падал на undefined.toFixed → ErrorBoundary показывал «Что-то пошло не так».
+  // Теперь: PATCH выполняется с .select().maybeSingle(); если строка не найдена или id не валидный
+  // uuid — делаем INSERT и возвращаем реальную запись из БД (её uuid подставится в стор).
+  const canPatch = typeof log.id === 'string' && UUID_RE.test(log.id);
   let data, error;
-  if (log.id) {
+  if (canPatch) {
     const r = { ...row }; delete r.user_id;
-    ({ data, error } = await supabase.from('inbody_logs').update(r).eq('id', log.id).eq('user_id', uid).select().single());
-    // запись не найдена (например, локальный id ещё не синхронизирован с БД) → вставляем как новую
-    if (error && (error.code === 'PGRST116' || /no rows/i.test(error.message || ''))) {
-      ({ data, error } = await supabase.from('inbody_logs').insert(row).select().single());
+    ({ data, error } = await supabase.from('inbody_logs').update(r)
+      .eq('id', log.id).eq('user_id', uid).select().maybeSingle());
+    if (error) {
+      console.warn('upsertInBodyLog: update failed, falling back to insert:', error.message);
+      data = null;
     }
-  } else {
+  }
+  if (!data) {
     ({ data, error } = await supabase.from('inbody_logs').insert(row).select().single());
   }
   if (error) throw error;
@@ -178,8 +189,46 @@ export async function saveGoal(uid, goal) {
 }
 
 // DECISION: нормализация строки goals (мигрированные колонки) → формат цели приложения.
-// Обратное маппирование старых значений (muscleMass/recomposition → % мышц):
-function normalizeGoalRow(g) {
+// Обратное маппирование старых значений (muscleMass/recomposition → % мышц).
+// + ремонт assessment: старые/битые строки в jsonb могли не содержать currentValue / targetUnit /
+// dailyCalorieAdjustment и т.п. — рендер GoalTab падал на «undefined.toFixed» (ErrorBoundary).
+// Все недостающие поля восстанавливаем из baseline, который всегда есть на экране «Цель».
+function repairAssessment(a, goalRow, baseline, gRow = {}) {
+  const src = a && typeof a === 'object' ? a : {};
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : undefined);
+  const out = { ...src };
+  const targetType = src.targetType || goalRow;
+  const unit = targetType === 'weight' ? 'кг' : '%';
+  const tv = num(src.targetValue);
+  const rowTarget = Number(gRow.targetValue);
+  out.targetType = GOAL_TYPES.includes(targetType) ? targetType : 'weight';
+  out.targetUnit = typeof src.targetUnit === 'string' && src.targetUnit ? src.targetUnit : unit;
+  if (num(src.currentValue) === undefined && baseline) {
+    out.currentValue = out.targetType === 'weight' ? baseline.weight
+      : out.targetType === 'fatPercent' ? baseline.fatPercent : baseline.musclePercent;
+  } else {
+    out.currentValue = num(src.currentValue) ?? 0;
+  }
+  if (tv !== undefined) out.targetValue = tv;
+  else if (isFinite(rowTarget)) out.targetValue = rowTarget;
+  else out.targetValue = 0;
+  if (num(src.targetDelta) === undefined) out.targetDelta = out.targetValue - out.currentValue;
+  if (typeof src.direction !== 'string') {
+    out.direction = src.targetDelta < 0 ? 'loss' : src.targetDelta > 0 ? 'gain' : 'maintain';
+  }
+  if (num(src.dailyCalorieAdjustment) === undefined) out.dailyCalorieAdjustment = 0;
+  if (num(src.daysAvailable) === undefined) out.daysAvailable = 1;
+  if (num(src.targetCalories) === undefined) out.targetCalories = num(baseline?.bmr) ?? 0;
+  if (num(src.targetProtein) === undefined) out.targetProtein = 0;
+  if (num(src.targetFat) === undefined) out.targetFat = 0;
+  if (num(src.targetCarbs) === undefined) out.targetCarbs = 0;
+  if (typeof src.isFeasible !== 'boolean') out.isFeasible = true;
+  if (typeof src.verdict !== 'string') out.verdict = '';
+  if (typeof src.limitDescription !== 'string') out.limitDescription = '';
+  return out;
+}
+
+function normalizeGoalRow(g, baseline = null) {
   let targetType = g.goal_type;
   let targetValue = g.target_weight_kg ?? g.target_fat_pct ?? g.target_muscle_pct;
   if (!GOAL_TYPES.includes(targetType)) {
@@ -187,16 +236,18 @@ function normalizeGoalRow(g) {
     targetValue = g.target_muscle_pct ?? g.target_fat_pct ?? g.target_weight_kg ?? targetValue;
   }
   return { id: g.id, targetType, targetValue,
-    targetDate: g.target_date, assessment: g.assessment || {}, createdAt: toMs(g.created_at) };
+    targetDate: g.target_date,
+    assessment: repairAssessment(g.assessment, targetType, baseline, { targetValue }),
+    createdAt: toMs(g.created_at) };
 }
 
-export async function fetchActiveGoal(uid) {
+export async function fetchActiveGoal(uid, baseline = null) {
   const { data, error } = await supabase.from('goals')
     .select('*').eq('user_id', uid).eq('status', 'active').order('created_at', { ascending: false }).limit(1);
   if (error) throw error;
   const g = data?.[0];
   if (!g) return null;
-  return normalizeGoalRow(g);
+  return normalizeGoalRow(g, baseline);
 }
 
 // ---------- history (материализуемая таблица из ТЗ §5; считается на клиенте при загрузке) ----------
