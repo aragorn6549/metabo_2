@@ -23,14 +23,27 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    let alive = true;
+    // DECISION: фикс мерцания дашборда — обработчик onAuthStateChange регистрируется ДО getSession(),
+    // иначе события инициализации клиента (SIGNED_OUT при сбое restoreSession и т.п.), произошедшие
+    // между ними, терялись и состояние рассинхронизировалось.
+    // Также игнорируем ложные SIGNED_OUT из init-фазы: финальное слово за getSession().
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!alive) return;
+      if (session?.user) {
+        setUser(session.user);
+        setAuthChecked(true);
+      } else if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
+        setUser(null);
+        setAuthChecked(true);
+      }
+    });
     supabase.auth.getSession().then(({ data }) => {
+      if (!alive) return;
       setUser(data.session?.user || null);
       setAuthChecked(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user || null);
-    });
-    return () => sub.subscription.unsubscribe();
+    return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
 
   const store = useMetaboStore(user);
@@ -61,6 +74,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    // DECISION: явный SIGNED_OUT обрабатываем здесь (в subscribe он игнорируется как ложный из init-фазы)
     setUser(null);
     setTab('map'); setMobileTab('map');
   };
