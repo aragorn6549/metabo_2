@@ -112,7 +112,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="musclePercent">% мышц</option>
             </select></div>
           <div className="field"><label>Значение ({unit})</label>
-            <NumberInput value={targetValue} onChange={v => setLocalValue(v === "" ? null : v)} placeholder="—" /></div>
+            <NumberInput value={targetValue} onChange={(v) => setLocalValue(v === "" || (Number.isFinite(+v) && +v === 0) ? null : v)} placeholder="—" /></div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
