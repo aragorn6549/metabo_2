@@ -3,6 +3,10 @@ import { useState, useMemo } from 'react';
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
 
+// DECISION: вкладка «Цель» приведена строго 1:1 к прототипу (Презентация.html, GoalTab).
+// Отличия сборки были: лишние guard-условия в useMemo (скрывали нижний блок оценки, когда пример его показывает),
+// и двойная проверка instanceof Date для realisticDate. Guard оставлен только на самый ранний stage (!baseline/!tdee),
+// как в примере; числовые проверки убраны.
 function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
   const [targetValue, setTargetValue] = useState(goal?.targetValue || 72);
@@ -12,9 +16,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   });
   const assessment = useMemo(() => {
     if (targetValue === '' || !targetDate) return null;
-    // baseline/tdee ещё не прогрузились — не считаем (иначе NaN/-Infinity и падение рендера)
-    if (!baseline || baseline.weight == null || baseline.fatPercent == null || baseline.musclePercent == null) return null;
-    if (!tdee || !isFinite(tdee)) return null;
+    if (!baseline || !tdee) return null; // данные ещё не прогрузились (в примере baseline всегда есть)
     return assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
   }, [targetType, targetValue, targetDate, baseline, tdee]);
   const handleSave = () => {
@@ -62,13 +64,13 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
                   {assessment.dailyCalorieAdjustment>0?'+':''}{assessment.dailyCalorieAdjustment} ккал</div></div>
               <div className="goal-detail"><div className="goal-detail-label">Реалистичная дата</div>
                 <div className="goal-detail-value">
-                  {(assessment.realisticDate instanceof Date ? assessment.realisticDate : new Date(assessment.realisticDate))
+                  {(assessment.realisticDate ? new Date(assessment.realisticDate) : new Date())
                     .toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})}</div></div>
             </div>
             {!assessment.isFeasible && (
               <div className="goal-warning">
                 ⚠ {assessment.limitDescription}. Сдвиньте дату на{' '}
-                <strong>{(assessment.realisticDate instanceof Date ? assessment.realisticDate : new Date(assessment.realisticDate))
+                <strong>{(assessment.realisticDate ? new Date(assessment.realisticDate) : new Date())
                   .toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}</strong>{' '}
                 или менее амбициозную цель.
               </div>
