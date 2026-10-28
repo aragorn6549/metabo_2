@@ -3,47 +3,51 @@ import { useState, useEffect } from 'react';
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
 
-// DECISION: страховка от «Cannot read properties of undefined (reading 'toFixed')» —
-// любое поле assessment (в т.ч. из старой/битой строки БД) приводится к числу; при NaN — fallback.
 const numOr = (v, d = 0) => { const n = +v; return Number.isFinite(n) ? n : d; };
 const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) ? n.toFixed(d) : fb; };
 
-// DECISION: empty state вкладки «Цель». Если цель ещё не поставлена (первый запуск или
-// удаление предыдущих целей), нижний блок НЕ рассчитывает оценку и НЕ показывает вердикты
-// («Реалистично» / «Слишком агрессивно») — пользователь ещё не задал цель.
-// Графа «Сейчас» берётся напрямую из замера InBody (baseline); «Цель», «Дневной профицит»,
-// «Реалистичная дата», КБЖУ — прочерк. Расчёт и вердикт появляются только после «Рассчитать».
 function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
-  // DECISION: без сохранённой цели поле «Значение» (goal-detail-value) подставляется
-  // из последнего (или единственного) замера InBody по выбранному параметру.
-  const baselineValueFor = (t) => {
-    if (!baseline) return '';
-    const v = t === 'weight' ? baseline.weight
-      : t === 'fatPercent' ? baseline.fatPercent
-      : baseline.musclePercent;
-    const n = +v;
-    return Number.isFinite(n) ? String(+n.toFixed(1)) : '';
+  // Helper to get value from baseline based on target type
+  const getBaselineValue = (type) => {
+    if (!baseline) return null;
+    const v = type === 'weight' ? baseline.weight
+      : type === 'fatPercent' ? baseline.fatPercent
+      : type === 'musclePercent' ? baseline.musclePercent
+      : null;
+    return Number.isFinite(+v) ? +v : null;
   };
+
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
-  const [targetValue, setTargetValue] = useState(() => goal?.targetValue ?? baselineValueFor(goal?.targetType || 'weight'));
+  
+  // Initialize with goal value or baseline value
+  const [targetValue, setTargetValue] = useState(() => {
+    if (goal?.targetValue != null && Number.isFinite(+goal.targetValue)) {
+      return String(goal.targetValue);
+    }
+    const bv = getBaselineValue(goal?.targetType || 'weight');
+    return bv != null ? String(bv) : '';
+  });
+  
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
 
-  // DECISION: если цель не задана — поле «Значение» всегда отражает последний замер;
-  // при смене параметра (вес / % жира / % мышц) подставляем значение из baseline.
-  // Если пользователь уже поставил цель (есть assessment) — его вводимые значения не трогаем.
+  // Sync targetValue with baseline when targetType changes and no active goal exists
   useEffect(() => {
     if (!goal?.assessment) {
-      setTargetValue(baselineValueFor(targetType));
+      const bv = getBaselineValue(targetType);
+      if (bv != null) {
+        setTargetValue(String(bv));
+      } else {
+        setTargetValue('');
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetType, goal?.assessment]);
-  // Локальная оценка считается ТОЛЬКО по кнопке «Рассчитать» (не на каждый ввод).
+  }, [targetType, goal]);
+
   const [localAssessment, setLocalAssessment] = useState(null);
   const effectiveAssessment = localAssessment ?? goal?.assessment ?? null;
-  const showDetails = !!effectiveAssessment; // до расчёта нет ни вердиктов, ни КБЖУ — только прочерки
+  const showDetails = !!effectiveAssessment;
 
   const handleSave = () => {
     setLocalAssessment(null);
@@ -66,14 +70,12 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
     }
   };
 
-  // Значение «Сейчас»: из сохранённой оценки (после расчёта), иначе напрямую из замера InBody.
+  // Display "Now" value: use assessment if available, otherwise fallback to baseline directly
   const nowValue = (() => {
-    if (effectiveAssessment && Number.isFinite(+effectiveAssessment.currentValue)) return +effectiveAssessment.currentValue;
-    if (!baseline) return null;
-    const v = targetType === 'weight' ? baseline.weight
-      : targetType === 'fatPercent' ? baseline.fatPercent
-      : baseline.musclePercent;
-    return Number.isFinite(+v) ? +v : null;
+    if (effectiveAssessment && Number.isFinite(+effectiveAssessment.currentValue)) {
+      return +effectiveAssessment.currentValue;
+    }
+    return getBaselineValue(targetType);
   })();
 
   const unit = targetType === 'weight' ? 'кг' : '%';
@@ -95,7 +97,12 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="musclePercent">% мышц</option>
             </select></div>
           <div className="field"><label>Значение ({unit})</label>
-            <NumberInput value={targetValue} onChange={v => setTargetValue(v)} placeholder="—" /></div>
+            <NumberInput 
+              value={targetValue} 
+              onChange={v => setTargetValue(v)} 
+              placeholder={nowValue != null ? String(nowValue) : '—'} 
+            />
+          </div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
@@ -173,7 +180,5 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
     </div>
   );
 }
-
-// ============================================================
 
 export default GoalTab;
