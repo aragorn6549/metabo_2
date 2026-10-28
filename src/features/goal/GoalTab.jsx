@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
@@ -6,52 +6,66 @@ import NumberInput from '@/components/NumberInput';
 const numOr = (v, d = 0) => { const n = +v; return Number.isFinite(n) ? n : d; };
 const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) ? n.toFixed(d) : fb; };
 
+// DECISION: empty state вкладки «Цель». Если цель ещё не поставлена (первый запуск или
+// удаление предыдущих целей), нижний блок НЕ рассчитывает оценку и НЕ показывает вердикты
+// («Реалистично» / «Слишком агрессивно») — пользователь ещё не задал цель.
+// Графа «Сейчас» берётся напрямую из замера InBody (baseline); «Цель», «Дневной профицит»,
+// «Реалистичная дата», КБЖУ — прочерк. Расчёт и вердикт появляются только после «Рассчитать».
 function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
-  // Helper to get value from baseline based on target type
-  const getBaselineValue = (type) => {
-    if (!baseline) return null;
-    const v = type === 'weight' ? baseline.weight
-      : type === 'fatPercent' ? baseline.fatPercent
-      : type === 'musclePercent' ? baseline.musclePercent
-      : null;
-    return Number.isFinite(+v) ? +v : null;
+  // DECISION: без сохранённой цели поле «Значение» (goal-detail-value) подставляется
+  // из последнего (или единственного) замера InBody по выбранному параметру.
+  const baselineValueFor = (t) => {
+    if (!baseline) return '';
+    const v = t === 'weight' ? baseline.weight
+      : t === 'fatPercent' ? baseline.fatPercent
+      : baseline.musclePercent;
+    const n = +v;
+    return Number.isFinite(n) ? String(+n.toFixed(1)) : '';
   };
-
+  // DECISION: если цель не задана — поле «Значение» ВСЕГДА отражает последний замер InBody.
+  // Реализация — «управляемое значение с фолбэком»: localValue === null означает
+  // «использовать последний замер». Как только baseline догрузился (или появился новый
+  // замер / сменился параметр) — в поле автоматически подставляется его значение; ручной
+  // ввод пользователя сохраняется в localValue и не перетирается, пока не изменится
+  // параметр или сам замер. Предыдущие версии через useEffect были ненадёжны: NumberInput
+  // отдаёт число, сравнение со строкой давало вечную «ложь», и эффект не вызывал setState.
+  const hasGoalAssessment = !!goal?.assessment;
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
-  
-  // Initialize with goal value or baseline value
-  const [targetValue, setTargetValue] = useState(() => {
-    if (goal?.targetValue != null && Number.isFinite(+goal.targetValue)) {
-      return String(goal.targetValue);
-    }
-    const bv = getBaselineValue(goal?.targetType || 'weight');
-    return bv != null ? String(bv) : '';
-  });
-  
+  const [localValue, setLocalValue] = useState(null);
+
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
 
-  // Sync targetValue with baseline when targetType changes and no active goal exists
-  useEffect(() => {
-    if (!goal?.assessment) {
-      const bv = getBaselineValue(targetType);
-      if (bv != null) {
-        setTargetValue(String(bv));
-      } else {
-        setTargetValue('');
-      }
-    }
-  }, [targetType, goal]);
-
+  // DECISION: сброс ручного ввода — только при смене ПАРАМЕТРА или появлении НОВОГО замера
+  // (baseline.id изменился). Раньше ключ включал baseline.date, а у каждого замера он новый —
+  // любое касание стора (сохранение цели/замера → пересоздание объекта baseline) сбрасывало
+  // поле обратно на значение из InBody, и «подстановка не работала» с точки зрения пользователя.
+  const prevTypeRef = useRef(targetType);
+  const prevLogIdRef = useRef(baseline?.id ?? null);
+  if (prevTypeRef.current !== targetType || prevLogIdRef.current !== (baseline?.id ?? null)) {
+    prevTypeRef.current = targetType;
+    prevLogIdRef.current = baseline?.id ?? null;
+    setLocalValue(null); // сброс ручного ввода → фолбэк на актуальный замер/цель
+  }
+  const targetValue = (() => {
+    // localValue != null — ручной ввод пользователя (в т.ч. «0»); пустая строка = поле очищено.
+    if (localValue != null && localValue !== '') return String(localValue);
+    if (hasGoalAssessment && goal?.targetValue != null) return String(+goal.targetValue);
+    return baselineValueFor(targetType); // цель не задана — значение из последнего замера
+  })();
+  // Локальная оценка считается ТОЛЬКО по кнопке «Рассчитать» (не на каждый ввод).
   const [localAssessment, setLocalAssessment] = useState(null);
   const effectiveAssessment = localAssessment ?? goal?.assessment ?? null;
-  const showDetails = !!effectiveAssessment;
+  const showDetails = !!effectiveAssessment; // до расчёта нет ни вердиктов, ни КБЖУ — только прочерки
 
   const handleSave = () => {
     setLocalAssessment(null);
     if (targetValue === '' || !targetDate || !baseline || !tdee) return;
+    // фиксируем введённое значение как ручное — после «Рассчитать» поле не должно
+    // перетираться фолбэком на замер, даже если goal ещё не вернулся из БД
+    if (localValue == null) setLocalValue(targetValue);
     try {
       const a = assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
       ['currentValue', 'dailyCalorieAdjustment', 'targetCalories', 'targetProtein',
@@ -70,12 +84,14 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
     }
   };
 
-  // Display "Now" value: use assessment if available, otherwise fallback to baseline directly
+  // Значение «Сейчас»: из сохранённой оценки (после расчёта), иначе напрямую из замера InBody.
   const nowValue = (() => {
-    if (effectiveAssessment && Number.isFinite(+effectiveAssessment.currentValue)) {
-      return +effectiveAssessment.currentValue;
-    }
-    return getBaselineValue(targetType);
+    if (effectiveAssessment && Number.isFinite(+effectiveAssessment.currentValue)) return +effectiveAssessment.currentValue;
+    if (!baseline) return null;
+    const v = targetType === 'weight' ? baseline.weight
+      : targetType === 'fatPercent' ? baseline.fatPercent
+      : baseline.musclePercent;
+    return Number.isFinite(+v) ? +v : null;
   })();
 
   const unit = targetType === 'weight' ? 'кг' : '%';
@@ -97,12 +113,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="musclePercent">% мышц</option>
             </select></div>
           <div className="field"><label>Значение ({unit})</label>
-            <NumberInput 
-              value={targetValue} 
-              onChange={v => setTargetValue(v)} 
-              placeholder={nowValue != null ? String(nowValue) : '—'} 
-            />
-          </div>
+            <NumberInput value={targetValue} onChange={(v) => setLocalValue(v === "" ? null : v)} placeholder="—" /></div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
