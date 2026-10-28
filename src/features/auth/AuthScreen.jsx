@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// DECISION: 1:1 разметка AuthScreen из прототипа; localStorage-авторизация заменена на Supabase Auth (ТЗ §5.1),
-// демо-режим удалён (ТЗ §5.1 п.4). Валидация пароля ≥6 символов (ТЗ §5.1).
-export default function AuthScreen() {
+// DECISION: 1:1 разметка AuthScreen из прототипа; localStorage-авторизация заменена на Supabase Auth (ТЗ §5.1).
+// Демо-режим возвращён по запросу пользователя: открывается кнопкой «Демонстрация», данные синтетические (src/demo),
+// БД не используется. Валидация пароля ≥6 символов (ТЗ §5.1).
+export default function AuthScreen({ onDemo }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +63,8 @@ export default function AuthScreen() {
             {busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
           </button>
         </form>
+        <button type="button" className="btn secondary" onClick={onDemo}
+          style={{ marginTop: 12, opacity: 0.9 }}>🎬 Демонстрация</button>
         <div className="auth-note">Данные хранятся в вашем личном Supabase-аккаунте.</div>
       </div>
     </div>
