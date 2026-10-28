@@ -1,23 +1,37 @@
-// DECISION: формулы скопированы из прототипа без изменений (ТЗ §6.4–6.5)
-function computePlan(goal, baseline) {
+import { simulateDay } from '@/math/simulation';
+
+// DECISION: формулы скопированы из прототипа без изменений (ТЗ §6.4–6.5),
+// КРОМЕ прогноза мышц: раньше он был «50% от привеса» и обнулялся при потере веса/цели на жир,
+// из-за чего блок «Синтез мышц» не отображался никогда. Теперь это честная оценка MPS−MPB
+// за сутки через ту же симуляцию метаболизма (simulateDay), при целевом балансе калорий.
+export function computePlan(goal, baseline, foodLogs, activities) {
   if (!goal || !goal.assessment) return null;
   if (!baseline) return null; // цель могла прийти из БД раньше, чем прогрузится baseline
   const days = Math.max(1, goal.assessment.daysAvailable);
-  let fatPerDay = 0, musclePerDay = 0;
+  let fatPerDay = 0;
   if (goal.targetType === 'weight') {
     const dW = goal.targetValue - baseline.weight;
     if (dW < 0) fatPerDay = -dW * 1000 * 0.85 / days;
-    else musclePerDay = dW * 1000 * 0.5 / days;
   } else if (goal.targetType === 'fatPercent') {
     const leanKg = baseline.weight * (1 - baseline.fatPercent / 100);
     const currFat = baseline.weight * baseline.fatPercent / 100;
     const targetFat = (goal.targetValue / 100) * leanKg / (1 - goal.targetValue / 100);
     fatPerDay = Math.max(0, (currFat - targetFat) * 1000 / days);
-  } else if (goal.targetType === 'musclePercent') {
+  }
+  let musclePerDay = 0;
+  if (goal.targetType === 'musclePercent') {
     const fatKg = baseline.weight * baseline.fatPercent / 100;
     const currMuscle = baseline.weight * baseline.musclePercent / 100;
     const targetMuscle = (goal.targetValue / 100) * fatKg / (1 - goal.targetValue / 100);
     musclePerDay = Math.max(0, (targetMuscle - currMuscle) * 1000 / days);
+  } else if (goal.targetType === 'weight' && (goal.targetValue - baseline.weight) > 0) {
+    musclePerDay = (goal.targetValue - baseline.weight) * 1000 * 0.5 / days;
+  }
+  if (musclePerDay <= 0) {
+    // целевой дневной энергобаланс = dailyCalorieAdjustment (дефицит/профицит относительно TDEE)
+    const bal = goal.assessment.dailyCalorieAdjustment || 0;
+    const sim = simulateDay(foodLogs || [], activities || [], bal);
+    if (sim && isFinite(sim.muscleToday)) musclePerDay = Math.max(0, sim.muscleToday);
   }
   return { fatPerDay, musclePerDay, days };
 }
@@ -143,6 +157,9 @@ function assessGoal({ targetType, targetValue, targetDate, baseline, tdee }) {
   const tCarb = Math.max(0, Math.round((tCal - tProt*4 - tFat*9)/4));
   return { isFeasible: feasible, verdict, direction: dir, targetType, targetValue, targetUnit: unit,
     currentValue: cur, targetDelta: delta, dailyCalorieAdjustment: Math.round(dAdj),
+    // DECISION: сохраняем tdee в assessment — computePlan восстанавливает целевой энергобаланс
+    // (targetCalories − tdee) для прогноза синтеза мышц даже после перезагрузки страницы
+    energyExpenditure: Math.round(tdee),
     targetCalories: tCal, targetProtein: tProt, targetFat: tFat, targetCarbs: tCarb,
     weeklyRateNeeded: weekly, monthlyRateNeeded: monthly, limitDescription: limitDesc,
     realisticDate: !feasible ? realDate : end, daysAvailable: days, originalDate: end };
@@ -151,4 +168,4 @@ function assessGoal({ targetType, targetValue, targetDate, baseline, tdee }) {
 // ============================================================
 // AUTH
 
-export { computePlan, deriveGoalTargets, computePlanSeries, getContextText, assessGoal };
+export { deriveGoalTargets, computePlanSeries, getContextText, assessGoal };

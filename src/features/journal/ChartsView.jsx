@@ -116,6 +116,98 @@ function ChartsView({ history, goal, baseline, sim, todayData }) {
           </tbody>
         </table>
       </div>
+
+      {/* DECISION: нижняя графа «Рекомендации» (ТЗ §7.4) — раньше отсутствовала entirely */}
+      <Recommendations history={history} goal={goal} baseline={baseline} sim={sim} todayData={todayData} />
+    </div>
+  );
+}
+
+function Recommendations({ history, goal, baseline, sim, todayData }) {
+  const items = useMemo(() => {
+    const out = [];
+    if (!todayData || !baseline) return out;
+    const { balance, macros, sleepHours, caloriesConsumed } = todayData;
+    const target = goal?.assessment || null;
+
+    // Белок
+    const proteinPerKg = baseline.weight > 0 ? macros.protein / baseline.weight : 0;
+    if (caloriesConsumed > 0) {
+      if (proteinPerKg < 1.2) {
+        out.push({ icon: '🥩', text: `Белка мало: ${macros.protein.toFixed(0)} г (${proteinPerKg.toFixed(1)} г/кг). Цель — не менее 1.6 г/кг (~${Math.round(baseline.weight*1.6)} г), это защищает мышцы в дефиците.` });
+      } else if (proteinPerKg >= 1.6) {
+        out.push({ icon: '✅', text: `Белка достаточно: ${proteinPerKg.toFixed(1)} г/кг — отлично для сохранения мышц.` });
+      }
+    }
+
+    // Баланс относительно плана цели
+    if (target) {
+      const planBal = target.dailyCalorieAdjustment;
+      if (balance < planBal - 300) {
+        out.push({ icon: '⚠️', text: `Дефицит слишком большой (${Math.round(balance)} ккал против плана ${planBal} ккал). Сильный дефицит гасит синтез мышц и сжигает мышечную ткань — добавь приём пищи.` });
+      } else if (planBal < 0 && balance > 200) {
+        out.push({ icon: '🍽', text: `Цель — дефицит ${planBal} ккал/день, но сегодня баланс +${Math.round(balance)}. Урежь порции или добавь активность.` });
+      } else if (Math.abs(balance - planBal) <= 300) {
+        out.push({ icon: '🎯', text: `Энергобаланс сегодня (${Math.round(balance)} ккал) соответствует плану цели (${planBal} ккал). Так держать!` });
+      }
+    }
+
+    // Сон
+    if (sleepHours < 7) {
+      out.push({ icon: '😴', text: `Сон ${sleepHours.toFixed(1)} ч — меньше 7 ч. Недосып повышает кортизол и MPB (распад мышц) и тормозит восстановление.` });
+    } else {
+      out.push({ icon: '😴', text: `Сон ${sleepHours.toFixed(1)} ч — достаточно для восстановления и синтеза мышц.` });
+    }
+
+    // Тренировки / MPS
+    if (sim) {
+      if (!todayData.hasStrength && balance > 0) {
+        out.push({ icon: '🏋️', text: 'Профицит без силовой тренировки: излишки скорее уйдут в жир. Силовая перенаправляет энергию в синтез мышц.' });
+      }
+      if (sim.muscleToday < -5) {
+        out.push({ icon: '📉', text: `Чистый баланс мышц за день ${sim.muscleToday.toFixed(1)} г (катаболизм). Ешь белок каждые 3–4 часа и не допускай голодания >9 ч.` });
+      } else if (sim.muscleToday > 5) {
+        out.push({ icon: '💪', text: `Синтез мышц опережает распад: net +${sim.muscleToday.toFixed(1)} г за день. Условия для роста созданы.` });
+      }
+    }
+
+    // Динамика веса vs цель
+    if (history.length >= 2 && goal) {
+      const first = history[0], last = history[history.length-1];
+      const days = Math.max(1, Math.round((new Date(last.date) - new Date(first.date)) / 86400e3));
+      const dW = last.weight - first.weight;
+      if (goal.targetType === 'weight' && dW !== 0) {
+        const dirGoal = goal.targetValue - baseline.weight;
+        if (dirGoal < 0 && dW > 0.1) out.push({ icon: '⚖️', text: `За ${days} дн. вес вырос на ${dW.toFixed(1)} кг при цели «вниз». Пересмотри план питания.` });
+        if (dirGoal > 0 && dW < -0.1) out.push({ icon: '⚖️', text: `За ${days} дн. вес упал на ${Math.abs(dW).toFixed(1)} кг при цели «набор». Нужен больший профицит.` });
+        if (dirGoal < 0 && dW < -0.1) out.push({ icon: '📉', text: `Динамика совпадает с целью: −${Math.abs(dW).toFixed(1)} кг за ${days} дн.` });
+        if (dirGoal > 0 && dW > 0.1) out.push({ icon: '📈', text: `Динамика совпадает с целью: +${dW.toFixed(1)} кг за ${days} дн.` });
+      }
+    }
+    return out;
+  }, [history, goal, baseline, sim, todayData]);
+
+  if (items.length === 0) {
+    return (
+      <div className="chart-card">
+        <div className="chart-title"><span>💡 Рекомендации <span>· на основе данных</span></span></div>
+        <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
+          Пока мало данных для выводов. Добавь приёмы пищи, сон и хотя бы два замера InBody — здесь появятся персональные рекомендации.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="chart-card">
+      <div className="chart-title"><span>💡 Рекомендации <span>· на основе журнала и цели</span></span></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ flexShrink: 0 }}>{it.icon}</span>
+            <span style={{ color: 'var(--text)' }}>{it.text}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

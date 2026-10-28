@@ -202,7 +202,13 @@ export function useMetaboStore(user) {
     return simulateDay(foodLogs, activities, todayData.balance);
   }, [foodLogs, activities, todayData?.balance, tick]);
 
-  const plan = useMemo(() => computePlan(goal, baseline), [goal, baseline]);
+  // DECISION: plan считается по симуляции за последние 7 дней (стабильный прогноз синтеза мышц),
+  // а не по «50% от привеса» — иначе блок рядом с фигурой пустовал при похудении.
+  const plan = useMemo(() => {
+    const recentFoods = foodLogs.filter(f => f.timestamp >= Date.now() - 7*86400e3);
+    const recentActs = activities.filter(a => a.timestamp >= Date.now() - 7*86400e3);
+    return computePlan(goal, baseline, recentFoods, recentActs);
+  }, [goal, baseline, foodLogs, activities]);
 
   return {
     loading, baseline, foodLogs, activities, dishes, goal, history, inbodyLogs,
