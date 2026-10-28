@@ -127,12 +127,19 @@ export async function upsertInBodyLog(uid, log) {
   const row = {
     user_id: uid, measured_at: log.date.includes?.('T') ? log.date : new Date(log.date).toISOString(),
     weight_kg: log.weight, fat_percent: log.fatPercent, muscle_percent: log.musclePercent,
-    bmr: Math.round(log.bmr), bmi: log.bmi,
+    bmr: Math.round(log.bmr), bmi: log.bmi ?? null,
   };
+  // DECISION: id строки генерирует Postgres (default gen_random_uuid()).
+  // Локальный rand-id из редактора НЕ пересылаем — иначе в колонку uuid попадает не-uuid
+  // и PATCH/POST падает с 400 (22P02) / 406.
   let data, error;
   if (log.id) {
     const r = { ...row }; delete r.user_id;
     ({ data, error } = await supabase.from('inbody_logs').update(r).eq('id', log.id).eq('user_id', uid).select().single());
+    // запись не найдена (например, локальный id ещё не синхронизирован с БД) → вставляем как новую
+    if (error && (error.code === 'PGRST116' || /no rows/i.test(error.message || ''))) {
+      ({ data, error } = await supabase.from('inbody_logs').insert(row).select().single());
+    }
   } else {
     ({ data, error } = await supabase.from('inbody_logs').insert(row).select().single());
   }
@@ -146,15 +153,11 @@ export async function deleteInBodyLog(id) {
 }
 
 // ---------- goals ----------
-export async function fetchActiveGoal(uid) {
-  const { data, error } = await supabase.from('goals')
-    .select('*').eq('user_id', uid).eq('status', 'active').order('created_at', { ascending: false }).limit(1);
-  if (error) throw error;
-  const g = data?.[0];
-  if (!g) return null;
-  return { id: g.id, targetType: g.target_type, targetValue: g.target_value,
-    targetDate: g.target_date, assessment: g.assessment || {}, createdAt: toMs(g.created_at) };
-}
+// Цели бывают трёх типов: weight | fatPercent | musclePercent (приложение никогда не писало muscleMass/recomposition,
+// но CHECK в старой схеме это допускал — поэтому миграция fix_migrate_goals.sql переносит такие значения как есть
+// и расширяет CHECK). См. supabase/schema.sql.
+const GOAL_TYPES = ['weight', 'fatPercent', 'musclePercent'];
+
 export async function saveGoal(uid, goal) {
   // одна активная цель: предыдущие закрываем
   await supabase.from('goals').update({ status: 'completed' }).eq('user_id', uid).eq('status', 'active');
@@ -162,12 +165,38 @@ export async function saveGoal(uid, goal) {
   // сериализуем в ISO-строки перед вставкой
   const serialize = (a) => JSON.parse(JSON.stringify(a ?? {}, (k, v) => (v instanceof Date ? v.toISOString() : v)));
   const { data, error } = await supabase.from('goals').insert({
-    user_id: uid, target_type: goal.targetType, target_value: goal.targetValue,
-    target_date: goal.targetDate, assessment: serialize(goal.assessment), status: 'active',
+    user_id: uid,
+    goal_type: goal.targetType,
+    target_weight_kg: goal.targetType === 'weight' ? goal.targetValue : null,
+    target_fat_pct: goal.targetType === 'fatPercent' ? goal.targetValue : null,
+    target_muscle_pct: goal.targetType === 'musclePercent' ? goal.targetValue : null,
+    target_date: goal.targetDate.slice(0, 10),
+    assessment: serialize(goal.assessment), status: 'active',
   }).select().single();
   if (error) throw error;
-  return { id: data.id, targetType: data.target_type, targetValue: data.target_value,
-    targetDate: data.target_date, assessment: data.assessment || {}, createdAt: toMs(data.created_at) };
+  return normalizeGoalRow(data);
+}
+
+// DECISION: нормализация строки goals (мигрированные колонки) → формат цели приложения.
+// Обратное маппирование старых значений (muscleMass/recomposition → % мышц):
+function normalizeGoalRow(g) {
+  let targetType = g.goal_type;
+  let targetValue = g.target_weight_kg ?? g.target_fat_pct ?? g.target_muscle_pct;
+  if (!GOAL_TYPES.includes(targetType)) {
+    targetType = 'musclePercent';
+    targetValue = g.target_muscle_pct ?? g.target_fat_pct ?? g.target_weight_kg ?? targetValue;
+  }
+  return { id: g.id, targetType, targetValue,
+    targetDate: g.target_date, assessment: g.assessment || {}, createdAt: toMs(g.created_at) };
+}
+
+export async function fetchActiveGoal(uid) {
+  const { data, error } = await supabase.from('goals')
+    .select('*').eq('user_id', uid).eq('status', 'active').order('created_at', { ascending: false }).limit(1);
+  if (error) throw error;
+  const g = data?.[0];
+  if (!g) return null;
+  return normalizeGoalRow(g);
 }
 
 // ---------- history (материализуемая таблица из ТЗ §5; считается на клиенте при загрузке) ----------

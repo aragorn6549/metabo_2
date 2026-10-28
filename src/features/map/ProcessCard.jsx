@@ -7,7 +7,7 @@ function ProcessCard({
   title, icon, color, 
   currentDisplayRate, todayDisplayValue, planDisplayValue, 
   currentHour, context, sparklineData, helpContent,
-  lipolysisRate, esterificationRate, fatDetail 
+  lipolysisRate, esterificationRate, fatDetail, muscleDetail 
 }) {
   const [showHelp, setShowHelp] = useState(false);
   const [secondsToNextHour, setSecondsToNextHour] = useState(() => {
@@ -165,6 +165,7 @@ function ProcessCard({
       )}
 
       {fatDetail && <div className="process-detail">{fatDetail}</div>}
+      {muscleDetail && <div className="process-detail">{muscleDetail}</div>}
 
       {sparklineData && sparklineData.length > 1 && (
         <div className="sparkline-wrapper">

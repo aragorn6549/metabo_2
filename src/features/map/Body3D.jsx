@@ -126,6 +126,10 @@ function Body3D({ fatIntensity, muscleIntensity, lipogenesisIntensity, netFatTod
 
   const showFatBurn = netFatToday != null && netFatToday > 0.5;
   const showFatGain = netFatToday != null && netFatToday < -0.5;
+  // DECISION: как и для жира — показываем обе стороны баланса мышц (было только «↑ синтез»,
+  // из-за чего при распадe/катаболизме рядом с фигурой не отображалось ничего)
+  const showMuscleSynth = muscleToday != null && muscleToday > 0.3;
+  const showMuscleLoss = muscleToday != null && muscleToday < -0.3;
 
   return (
     <div className="body3d-container">
@@ -140,9 +144,14 @@ function Body3D({ fatIntensity, muscleIntensity, lipogenesisIntensity, netFatTod
           ↑ {Math.round(Math.abs(netFatToday))}г накоплено
         </div>
       )}
-      {muscleToday > 0.3 && (
+      {showMuscleSynth && (
         <div className="floating-delta delta-muscle" style={{ top:'58%', right:'6%', animation:'floatUp 2.4s ease-in-out infinite alternate' }}>
           ↑ {Math.round(muscleToday)}г мышц
+        </div>
+      )}
+      {showMuscleLoss && (
+        <div className="floating-delta delta-muscle" style={{ top:'58%', right:'6%', color:'var(--fat)', animation:'floatUp 2.4s ease-in-out infinite alternate' }}>
+          ↓ {Math.round(Math.abs(muscleToday))}г мышц (распад)
         </div>
       )}
       <div className="drag-hint">⟲ потяни, чтобы повернуть</div>

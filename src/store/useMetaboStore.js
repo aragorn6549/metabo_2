@@ -113,12 +113,12 @@ export function useMetaboStore(user) {
   };
 
   const saveInbody = async (entry) => {
-    try {
-      const saved = await db.upsertInBodyLog(uid, entry);
-      // DECISION: в БД id — uuid; локальный rand-id из редактора заменяем на реальный uuid строки
-      const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
-      applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
-    } catch (err) { console.error(err); }
+    // DECISION: бросаем ошибку наверх — UI покажет честный toast вместо ложного «✓ добавлен»
+    const saved = await db.upsertInBodyLog(uid, entry);
+    // локальный rand-id из редактора заменяем на реальный uuid строки из БД
+    const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
+    applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
+    return saved;
   };
 
   const deleteInbody = async (entry) => {
@@ -133,7 +133,7 @@ export function useMetaboStore(user) {
     try {
       const saved = await db.saveGoal(uid, g);
       setGoal(saved);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error('saveGoal:', err); throw err; }
   };
 
   const updateBaseline = async (data) => {
