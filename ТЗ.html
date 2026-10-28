@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>MetaBo — Production Spec (печатная версия)</title>
+<style>
+  :root {
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #d0d0d0;
+    --code-bg: #f4f5f7;
+    --code-border: #e0e2e8;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --ok: #15803d;
+    --ok-soft: #dcfce7;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    color: var(--text);
+    font-family: Georgia, 'Times New Roman', 'PT Serif', serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    background: #e5e7eb;
+    padding: 20px;
+  }
+
+  .page {
+    background: #fff;
+    max-width: 900px;
+    margin: 0 auto 20px;
+    padding: 60px 60px 70px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  }
+
+  /* ---------- Typography ---------- */
+
+  h1, h2, h3, h4, h5 {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.25;
+    margin: 0 0 12px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h1 {
+    font-size: 30pt;
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid var(--accent);
+    margin-bottom: 8px;
+  }
+
+  h1 .subtitle {
+    display: block;
+    font-size: 12pt;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+    margin-top: 8px;
+  }
+
+  h2 {
+    font-size: 18pt;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--accent);
+  }
+
+  h2 .num {
+    display: inline-block;
+    min-width: 1.4em;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 700;
+    margin-top: 22px;
+  }
+
+  h4 {
+    font-size: 11pt;
+    font-weight: 700;
+    margin-top: 16px;
+  }
+
+  p { margin: 0 0 10px; }
+
+  ul, ol {
+    margin: 0 0 12px;
+    padding-left: 24px;
+  }
+
+  li { margin-bottom: 4px; }
+
+  strong { font-weight: 700; }
+  em { font-style: italic; }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ---------- Inline code ---------- */
+
+  code {
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 9.5pt;
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #c0392b;
+  }
+
+  /* ---------- Code blocks ---------- */
+
+  pre {
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 0 0 14px;
+    white-space: pre;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: inherit;
+  }
+
+  /* ---------- Callouts ---------- */
+
+  .callout {
+    border-left: 4px solid;
+    padding: 10px 16px;
+    margin: 12px 0;
+    border-radius: 4px;
+    font-size: 10.5pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .callout.info { border-color: var(--accent); background: var(--accent-soft); }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.ok   { border-color: var(--ok);   background: var(--ok-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout strong { color: inherit; }
+
+  /* ---------- Tables ---------- */
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+    margin: 12px 0 16px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th, td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f9fafb;
+    font-weight: 700;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  /* ---------- Checklist ---------- */
+
+  .checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+  }
+
+  .checklist li {
+    padding: 6px 0 6px 30px;
+    position: relative;
+    border-bottom: 1px dashed var(--border);
+    font-size: 10.5pt;
+  }
+
+  .checklist li:last-child { border-bottom: none; }
+
+  .checklist li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background: #fff;
+  }
+
+  /* ---------- TOC ---------- */
+
+  .toc {
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin: 20px 0 28px;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    font-size: 10.5pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .toc h3 {
+    margin: 0 0 10px;
+    font-size: 11pt;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .toc ol {
+    margin: 0;
+    padding-left: 20px;
+    columns: 2;
+    column-gap: 32px;
+  }
+
+  .toc li { margin-bottom: 4px; break-inside: avoid; }
+  .toc a { color: var(--text); }
+
+  /* ---------- Misc ---------- */
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 24px;
+    font-size: 10pt;
+    margin: 0 0 24px;
+    padding: 14px 18px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  .meta-grid dt { color: var(--muted); font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.4px; }
+  .meta-grid dd { margin: 2px 0 8px; font-weight: 700; }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-right: 6px;
+  }
+
+  .tag.must { background: #fee2e2; color: #b91c1c; }
+  .tag.dont { background: #fef3c7; color: var(--warn); }
+
+  /* ---------- Print rules ---------- */
+
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm;
+  }
+
+  @media print {
+    body {
+      background: #fff;
+      padding: 0;
+    }
+    .page {
+      box-shadow: none;
+      margin: 0;
+      padding: 0;
+      max-width: none;
+    }
+    h2 {
+      page-break-before: auto;
+    }
+    h2.major {
+      page-break-before: always;
+    }
+    pre, table, .callout, .toc, .meta-grid, .checklist {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    h1, h2, h3, h4 {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    a { color: var(--text); text-decoration: underline; }
+    /* Колонтитул со страницами */
+    @page {
+      @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: -apple-system, sans-serif;
+        font-size: 8pt;
+        color: #999;
+      }
+    }
+  }
+
+  /* Экранная подсказка о печати */
+  .print-hint {
+    max-width: 900px;
+    margin: 0 auto 16px;
+    padding: 10px 16px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 8px;
+    font-family: -apple-system, sans-serif;
+    font-size: 10.5pt;
+    text-align: center;
+  }
+
+  @media print {
+    .print-hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-hint">
+  🖨 Для печати: <strong>Ctrl+P</strong> (Cmd+P на Mac) → выбрать «Сохранить как PDF». Формат A4, поля 18/16/20 мм.
+</div>
+
+<div class="page">
+
+  <!-- ═══════════════ ОБЛОЖКА ═══════════════ -->
+
+  <h1>
+    MetaBo
+    <span class="subtitle">Production Specification · React + TypeScript + Supabase + Vercel</span>
+  </h1>
+
+  <dl class="meta-grid">
+    <div>
+      <dt>Документ</dt>
+      <dd>README.md → Printable</dd>
+    </div>
+    <div>
+      <dt>Версия</dt>
+      <dd>1.0</dd>
+    </div>
+    <div>
+      <dt>Прототип</dt>
+      <dd>MetaBol.txt (HTML, localStorage)</dd>
+    </div>
+    <div>
+      <dt>Цель</dt>
+      <dd>Полноценное приложение с БД и аутентификацией</dd>
+    </div>
+    <div>
+      <dt>Стек</dt>
+      <dd>React · TS · Supabase · Vercel</dd>
+    </div>
+    <div>
+      <dt>Роль документа</dt>
+      <dd>ТЗ для AI-агента-разработчика</dd>
+    </div>
+  </dl>
+
+  <div class="callout info">
+    <p><strong>Для AI-агента-разработчика:</strong> ниже — полное техническое задание на переделку HTML-прототипа <code>MetaBol.txt</code> (одностраничный React-компонент с localStorage) в полноценное production-приложение на <strong>React + TypeScript + Supabase + Vercel</strong>. Сохрани <strong>всю функциональность и визуальный дизайн</strong> прототипа, но переведи данные с <code>localStorage</code> на Postgres (Supabase) с аутентификацией и RLS. Следуй разделам по порядку — там вся спецификация, включая формулы, схему БД и чеклист приёмки.</p>
+  </div>
+
+  <!-- ═══════════════ TOC ═══════════════ -->
+
+  <div class="toc">
+    <h3>Содержание</h3>
+    <ol>
+      <li><a href="#s0">TL;DR</a></li>
+      <li><a href="#s1">Что делает приложение</a></li>
+      <li><a href="#s2">Технологический стек</a></li>
+      <li><a href="#s3">Структура проекта</a></li>
+      <li><a href="#s4">Supabase: схема БД</a></li>
+      <li><a href="#s5">Аутентификация и онбординг</a></li>
+      <li><a href="#s6">Бизнес-логика и формулы</a></li>
+      <li><a href="#s7">API-слой (React Query)</a></li>
+      <li><a href="#s8">Функциональные требования по экранам</a></li>
+      <li><a href="#s9">Мобильный UX</a></li>
+      <li><a href="#s10">Demo-режим</a></li>
+      <li><a href="#s11">Миграция данных</a></li>
+      <li><a href="#s12">Переменные окружения</a></li>
+      <li><a href="#s13">Деплой на Vercel</a></li>
+      <li><a href="#s14">Чеклист приёмки (QA)</a></li>
+      <li><a href="#s15">Что НЕ делать</a></li>
+      <li><a href="#s16">Опциональные улучшения</a></li>
+      <li><a href="#s17">Ссылка на прототип</a></li>
+    </ol>
+  </div>
+
+  <!-- ═══════════════ 0. TL;DR ═══════════════ -->
+
+  <h2 id="s0" class="major"><span class="num">0.</span> TL;DR</h2>
+
+  <ul>
+    <li><strong>Что:</strong> MetaBo — приложение для трекинга метаболизма, состава тела, еды и тренировок. Показывает «здесь и сейчас» баланс жира (липолиз / эстерификация) и синтез мышц на 3D-модели тела в реальном времени.</li>
+    <li><strong>Стек:</strong> React 18 + TypeScript + Vite, Supabase (Auth + Postgres + RLS), Three.js, React Query, Recharts или собственные SVG-графики, Vercel.</li>
+    <li><strong>Не менять:</strong> математические модели, формулы, логику симуляции, дизайн-систему, UX-структуру табов.</li>
+    <li><strong>Изменить:</strong> способ хранения (Postgres вместо localStorage), аутентификация (Supabase Auth вместо самописной), API-слой, обработка loading/error, типизация, деплой.</li>
+  </ul>
+
+  <!-- ═══════════════ 1. ЧТО ДЕЛАЕТ ═══════════════ -->
+
+  <h2 id="s1" class="major"><span class="num">1.</span> Что делает приложение</h2>
+
+  <p>Приложение трекает ежедневный обмен веществ, опираясь на:</p>
+
+  <ol>
+    <li><strong>Замеры InBody</strong> (вес, % жира, % мышц, BMR, ИМТ) — история с дельтами.</li>
+    <li><strong>Приёмы пищи</strong> (КБЖУ + время) — из каталога блюд или вручную.</li>
+    <li><strong>Тренировки</strong> (силовые / кардио / спорт по MET), сон, прочая активность.</li>
+    <li><strong>Цель</strong> (вес / % жира / % мышц + дата) с проверкой реалистичности и расчётом дневных КБЖУ-норм.</li>
+  </ol>
+
+  <p>На основе этих данных приложение:</p>
+
+  <ul>
+    <li>Считает <strong>BMR / TDEE / TEF</strong> по Mifflin–St Jeor.</li>
+    <li>Симулирует <strong>почасовую динамику</strong> липолиза, эстерификации, чистого жирового потока, синтеза и распада мышц (формулы в §6).</li>
+    <li>Рисует <strong>3D-модель тела</strong> с визуализацией процессов (Three.js).</li>
+    <li>Показывает <strong>прогресс к цели</strong> (опережение / отставание) по каждому процессу.</li>
+    <li>Строит <strong>графики</strong> (вес, % жира, % мышц, липолиз, липогенез, синтез мышц, энергобаланс) и <strong>таблицу истории</strong>.</li>
+  </ul>
+
+  <!-- ═══════════════ 2. СТЕК ═══════════════ -->
+
+  <h2 id="s2" class="major"><span class="num">2.</span> Технологический стек (обязательный)</h2>
+
+  <table>
+    <thead>
+      <tr><th style="width:30%">Слой</th><th>Технология</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>UI</td><td>React 18 + TypeScript, Vite</td></tr>
+      <tr><td>Роутинг</td><td>React Router v6 (или state-based с URL-hash)</td></tr>
+      <tr><td>Server-state</td><td>TanStack React Query v5</td></tr>
+      <tr><td>UI-state</td><td>Zustand (модалки, активный таб, тосты)</td></tr>
+      <tr><td>Формы</td><td>react-hook-form + zod</td></tr>
+      <tr><td>Стили</td><td>Сохранить текущий CSS или перенести в Tailwind (дизайн 1:1)</td></tr>
+      <tr><td>3D</td><td>three@0.160+</td></tr>
+      <tr><td>Графики</td><td>Recharts <strong>или</strong> свои SVG (как в прототипе)</td></tr>
+      <tr><td>Даты</td><td>date-fns (locale: ru)</td></tr>
+      <tr><td>Тосты</td><td>sonner или своя реализация</td></tr>
+      <tr><td>Backend</td><td>Supabase (Postgres 15, Auth, RLS)</td></tr>
+      <tr><td>Деплой</td><td>Vercel</td></tr>
+      <tr><td>Тесты</td><td>Vitest (юнит-тесты формул) + Playwright (e2e happy path)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ═══════════════ 3. СТРУКТУРА ═══════════════ -->
+
+  <h2 id="s3" class="major"><span class="num">3.</span> Структура проекта</h2>
+
+<pre><code>metabo/
+├── api/                 # (опционально) edge-функции, если нужен cron/снапшоты
+├── public/
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── router.tsx
+│   ├── lib/
+│   │   ├── supabase.ts              # createClient(...)
+│   │   ├── queryClient.ts
+│   │   └── utils.ts
+│   ├── types/
+│   │   ├── db.ts                    # типы БД (сгенерировать supabase gen types)
+│   │   └── domain.ts
+│   ├── features/
+│   │   ├── auth/
+│   │   │   ├── AuthScreen.tsx
+│   │   │   ├── useAuth.ts
+│   │   │   └── ProtectedRoute.tsx
+│   │   ├── onboarding/
+│   │   │   ├── OnboardingScreen.tsx
+│   │   │   └── useProfile.ts
+│   │   ├── inbody/
+│   │   │   ├── InBodyTab.tsx
+│   │   │   ├── InBodyEditor.tsx
+│   │   │   └── useInBodyLogs.ts
+│   │   ├── food/
+│   │   │   ├── DishesTab.tsx
+│   │   │   ├── DishEditor.tsx
+│   │   │   ├── FoodLogger.tsx
+│   │   │   └── useFoodLogs.ts
+│   │   ├── activities/
+│   │   │   ├── ActivityLogger.tsx
+│   │   │   ├── ActivityHistory.tsx
+│   │   │   └── useActivities.ts
+│   │   ├── goal/
+│   │   │   ├── GoalTab.tsx
+│   │   │   └── useGoal.ts
+│   │   ├── map/
+│   │   │   ├── MetabolismMap.tsx
+│   │   │   ├── Body3D.tsx
+│   │   │   ├── ProcessCard.tsx
+│   │   │   └── MiniSparkline.tsx
+│   │   ├── journal/
+│   │   │   ├── Journal.tsx
+│   │   │   ├── ChartsView.tsx
+│   │   │   ├── LineChart.tsx
+│   │   │   └── useDailyHistory.ts
+│   │   ├── help/
+│   │   │   └── HelpTab.tsx
+│   │   └── profile/
+│   │       └── MobileProfile.tsx
+│   ├── components/
+│   │   ├── Layout.tsx
+│   │   ├── MobileNav.tsx
+│   │   ├── NumberInput.tsx
+│   │   ├── Toast.tsx
+│   │   └── ...
+│   ├── hooks/
+│   │   └── useMediaQuery.ts
+│   ├── math/
+│   │   ├── bmr.ts
+│   │   ├── tdee.ts
+│   │   ├── simulation.ts            # ВАЖНО: см. §6.3
+│   │   ├── goalAssessment.ts
+│   │   └── bmi.ts
+│   └── styles/
+│       └── global.css               # копия CSS из прототипа
+├── supabase/
+│   └── migrations/
+│       └── 0001_init.sql
+├── .env.example
+├── vite.config.ts
+├── tsconfig.json
+├── package.json
+├── vercel.json
+└── README.md</code></pre>
+
+  <!-- ═══════════════ 4. БД ═══════════════ -->
+
+  <h2 id="s4" class="major"><span class="num">4.</span> Supabase: схема БД</h2>
+
+  <p>Создай проект Supabase, включи <strong>Email/Password Auth</strong>, и примени миграцию.</p>
+
+<pre><code>-- ────────────────────────────────────────────────────────────
+-- 1. PROFILES (расширение auth.users)
+-- ────────────────────────────────────────────────────────────
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  name text,
+  age int,
+  gender text check (gender in ('male','female')),
+  height_cm numeric(5,1),
+  activity_level text check (activity_level in ('sedentary','light','moderate','high','extreme')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Триггер: создать профиль после регистрации
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+begin
+  insert into public.profiles (id, email) values (new.id, new.email);
+  return new;
+end; $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ────────────────────────────────────────────────────────────
+-- 2. INBODY_LOGS
+-- ────────────────────────────────────────────────────────────
+create table public.inbody_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  measured_at timestamptz not null,
+  weight_kg numeric(5,1) not null check (weight_kg &gt; 0),
+  fat_percent numeric(4,1) not null check (fat_percent between 0 and 70),
+  muscle_percent numeric(4,1) not null check (muscle_percent between 0 and 70),
+  bmr numeric(6,0) not null check (bmr &gt; 0),
+  bmi numeric(4,1),
+  created_at timestamptz not null default now()
+);
+create index inbody_logs_user_date_idx on public.inbody_logs(user_id, measured_at desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 3. FOOD_LOGS
+-- ────────────────────────────────────────────────────────────
+create table public.food_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  calories numeric(6,1) not null default 0 check (calories &gt;= 0),
+  protein numeric(5,1) not null default 0 check (protein &gt;= 0),
+  fat numeric(5,1) not null default 0 check (fat &gt;= 0),
+  carbs numeric(5,1) not null default 0 check (carbs &gt;= 0),
+  consumed_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index food_logs_user_ts_idx on public.food_logs(user_id, consumed_at desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 4. ACTIVITIES
+-- ────────────────────────────────────────────────────────────
+create table public.activities (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  type text not null check (type in ('workout','sleep','other')),
+  subtype text,  -- strength|cardio|volleyball|padel|tennis|football|basketball|walk|work_sit|work_stand|chill
+  duration_min int check (duration_min &gt;= 0),
+  calories numeric(6,1) check (calories &gt;= 0),
+  hours numeric(4,2) check (hours &gt;= 0),
+  quality int check (quality between 1 and 5),
+  started_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index activities_user_ts_idx on public.activities(user_id, started_at desc);
+
+-- ────────────────────────────────────────────────────────────
+-- 5. DISHES (каталог блюд)
+-- ────────────────────────────────────────────────────────────
+create table public.dishes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  calories numeric(6,1) not null default 0 check (calories &gt;= 0),
+  protein numeric(5,1) not null default 0 check (protein &gt;= 0),
+  fat numeric(5,1) not null default 0 check (fat &gt;= 0),
+  carbs numeric(5,1) not null default 0 check (carbs &gt;= 0),
+  created_at timestamptz not null default now()
+);
+create index dishes_user_idx on public.dishes(user_id);
+create unique index dishes_user_name_idx on public.dishes(user_id, lower(name));
+
+-- ────────────────────────────────────────────────────────────
+-- 6. GOALS (цели, одна активная)
+-- ────────────────────────────────────────────────────────────
+create table public.goals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  target_type text not null check (target_type in ('weight','fatPercent','musclePercent')),
+  target_value numeric(5,1) not null,
+  target_date date not null,
+  assessment jsonb not null,          -- снапшот assessGoal()
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+-- Только одна активная цель на пользователя
+create unique index goals_one_active_idx on public.goals(user_id) where is_active = true;
+
+-- ────────────────────────────────────────────────────────────
+-- 7. DAILY_HISTORY (дневные снапшоты, для графиков)
+-- ────────────────────────────────────────────────────────────
+create table public.daily_history (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day date not null,
+  weight_kg numeric(5,1),
+  fat_percent numeric(4,1),
+  muscle_percent numeric(4,1),
+  calories_consumed numeric(6,1),
+  balance numeric(6,1),
+  fat_oxidized numeric(6,1),
+  fat_stored numeric(6,1),
+  muscle_net numeric(6,1),
+  created_at timestamptz not null default now(),
+  unique (user_id, day)
+);
+create index daily_history_user_day_idx on public.daily_history(user_id, day desc);</code></pre>
+
+  <h3>4.1 RLS-политики (обязательно)</h3>
+
+  <p>Для <strong>всех</strong> таблиц включи RLS и добавь политику «только своё»:</p>
+
+<pre><code>alter table public.profiles      enable row level security;
+alter table public.inbody_logs   enable row level security;
+alter table public.food_logs     enable row level security;
+alter table public.activities    enable row level security;
+alter table public.dishes        enable row level security;
+alter table public.goals         enable row level security;
+alter table public.daily_history enable row level security;
+
+-- Шаблон для пользовательских таблиц
+create policy "own_rows" on public.inbody_logs
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- (повторить для food_logs, activities, dishes, goals, daily_history)
+
+create policy "own_profile" on public.profiles
+  for all using (auth.uid() = id) with check (auth.uid() = id);</code></pre>
+
+  <h3>4.2 Генерация типов</h3>
+
+<pre><code>npx supabase gen types typescript --project-id &lt;id&gt; &gt; src/types/db.ts</code></pre>
+
+  <!-- ═══════════════ 5. AUTH ═══════════════ -->
+
+  <h2 id="s5" class="major"><span class="num">5.</span> Аутентификация и онбординг</h2>
+
+  <h3>5.1 Auth-флоу</h3>
+
+  <ol>
+    <li><strong><code>AuthScreen</code></strong> (<code>/login</code>) — две вкладки: Вход / Регистрация.
+      <ul>
+        <li>Email + password. Валидация: email содержит <code>@</code>, пароль ≥ 6 символов (в проде — минимум 8).</li>
+        <li><code>supabase.auth.signUp({ email, password })</code> / <code>signInWithPassword</code>.</li>
+        <li>Ошибки Supabase (<code>Invalid login credentials</code>, <code>User already registered</code>) → показать в <code>.auth-error</code>.</li>
+        <li><strong>Удалить</strong> демо-режим и «⚡ Попробовать демо» — либо реализовать через <code>signInAnonymously()</code> c отдельным флагом <code>is_demo</code> в profiles (см. §10).</li>
+      </ul>
+    </li>
+    <li><strong>Защита роутов:</strong> <code>&lt;ProtectedRoute&gt;</code> проверяет <code>useAuth()</code> (обёртка над <code>supabase.auth.getSession()</code> + <code>onAuthStateChange</code>). Редирект на <code>/login</code>, если нет сессии.</li>
+    <li><strong>Logout:</strong> <code>supabase.auth.signOut()</code> + очистка React Query кэша (<code>queryClient.clear()</code>).</li>
+  </ol>
+
+  <h3>5.2 Онбординг</h3>
+
+  <p>Показывается, если у профиля нет хотя бы одного <code>inbody_log</code> (или <code>profile.age is null</code>).</p>
+
+  <p>Форма (поля 1:1 из прототипа):</p>
+  <ul>
+    <li>Имя, Возраст, Пол (male/female), Рост (см), Вес (кг), % жира, % мышц, Уровень активности.</li>
+    <li>BMR считается на лету (Mifflin–St Jeor) и показывается в <code>.stat-card</code>.</li>
+    <li>При сохранении:
+      <ol>
+        <li><code>update profiles set name, age, gender, height_cm, activity_level</code>.</li>
+        <li><code>insert into inbody_logs</code> — первый замер на сегодня.</li>
+        <li>Инвалидировать запросы <code>profile</code> и <code>inbody_logs</code>.</li>
+      </ol>
+    </li>
+  </ul>
+
+  <div class="callout warn">
+    <p><strong>Baseline</strong> для всех расчётов = <strong>последний по дате</strong> <code>inbody_log</code>. Не хранить weight/fat/muscle в <code>profiles</code> — только рост, возраст, пол, активность.</p>
+  </div>
+
+  <!-- ═══════════════ 6. ЛОГИКА ═══════════════ -->
+
+  <h2 id="s6" class="major"><span class="num">6.</span> Бизнес-логика (не менять — копировать точь-в-точь)</h2>
+
+  <p>Все формулы должны совпадать с прототипом, иначе цифры «поплывут». Разместить в <code>src/math/</code>. Ниже — референсные формулы и псевдокод.</p>
+
+  <h3>6.1 BMR, TEF, TDEE, BMI</h3>
+
+<pre><code>// bmr.ts
+export const calculateBMR = (w: number, h: number, a: number, g: 'male'|'female') =&gt; {
+  const b = 10*w + 6.25*h - 5*a;
+  return g === 'male' ? b + 5 : b - 161;
+};
+
+// tdee.ts
+export const calculateTEF = (p: number, c: number, f: number) =&gt;
+  p*4*0.30 + c*4*0.10 + f*9*0.03;
+
+export const ACTIVITY_COEF = {
+  sedentary: 1.2, light: 1.375, moderate: 1.55, high: 1.725, extreme: 1.9,
+} as const;
+
+export const calculateTDEE = (
+  bmr: number, level: ActivityLevel, workoutCal: number, macros: Macros
+) =&gt; bmr * ACTIVITY_COEF[level] + calculateTEF(macros.protein, macros.carbs, macros.fat) + workoutCal;
+
+// bmi.ts
+export const calcBMI = (w: number, hCm: number) =&gt; +(w / Math.pow(hCm/100, 2)).toFixed(1);</code></pre>
+
+  <h3>6.2 MET</h3>
+
+<pre><code>export const MET_COEF = { volleyball: 4.0, padel: 6.0, tennis: 7.0, football: 7.0, basketball: 6.5 } as const;
+export const calcMETCalories = (met: number, w: number, min: number) =&gt;
+  Math.round(met * w * (min/60));</code></pre>
+
+  <h3>6.3 Почасовая симуляция — ГЛАВНАЯ ФУНКЦИЯ</h3>
+
+  <p>Это сердце приложения. Скопируй <strong>без изменений логики</strong>:</p>
+
+<pre><code>export type HourlyRate = {
+  lipolysis: number;
+  esterification: number;
+  netFatFlux: number;   // &lt; 0 — сжигание, &gt; 0 — накопление
+  netMuscle: number;
+};
+
+export function computeHourlyRate(
+  hour: number,
+  dayStartTs: number,
+  foodLogs: FoodLog[],
+  activities: Activity[],
+  calorieBalance: number,
+): HourlyRate {
+  const isSleepingHour = hour &gt;= 23 || hour &lt; 7;
+  const baseFat = 0.22;
+  let insulinSuppression = 1.0;
+  let insulinSignal = 0;
+
+  // Инсулиновая супрессия липолиза — 5 ч после еды
+  for (const meal of foodLogs) {
+    const hoursSince = hour - (meal.timestamp - dayStartTs) / 3600e3;
+    if (hoursSince &lt; 0 || hoursSince &gt; 5) continue;
+    const suppStrength = Math.min(0.9, 0.3 + (meal.carbs||0)*0.012 + (meal.calories||0)/2500);
+    const decay = 1 - hoursSince/5;
+    insulinSuppression *= (1 - suppStrength * decay);
+    const peak = hoursSince &lt; 1 ? hoursSince : Math.max(0, 1 - (hoursSince-1)/4);
+    insulinSignal += ((meal.carbs||0)*0.02 + (meal.fat||0)*0.03
+                    + (meal.protein||0)*0.015 + (meal.calories||0)/1000) * peak;
+  }
+
+  // Циркадный ритм
+  const circadian = 0.6 + 0.55 * Math.cos((hour - 4) / 24 * 2 * Math.PI);
+
+  // Сон
+  let sleepBoost = isSleepingHour ? 1.4 : 1.0;
+  for (const s of activities.filter(a =&gt; a.type === 'sleep')) {
+    const startHour = (s.timestamp - dayStartTs) / 3600e3;
+    const endHour = startHour + (s.hours || 8);
+    if (hour &gt;= startHour &amp;&amp; hour &lt;= endHour) sleepBoost = Math.max(sleepBoost, 1.45);
+  }
+
+  // Тренировки: кардио даёт больший буст липолиза, силовые — меньший
+  let exerciseBoost = 0;
+  for (const w of activities.filter(a =&gt; a.type === 'workout')) {
+    const hoursSince = hour - (w.timestamp - dayStartTs) / 3600e3;
+    if (hoursSince &lt; 0) continue;
+    const cardioFactor = w.subtype === 'cardio' ? 1.0 : 0.35;
+    const intensity = Math.min(1, (w.calories || 300) / 500);
+    exerciseBoost += cardioFactor * intensity * Math.exp(-hoursSince / 2) * 0.9;
+  }
+
+  // Дефицит/профицит
+  const deficitFactor = calorieBalance &lt; 0
+    ? 1 + Math.min(1.0, Math.abs(calorieBalance) / 600)
+    : Math.max(0.35, 1 - calorieBalance / 1200);
+
+  const lipolysis = Math.max(0.01,
+    (baseFat + exerciseBoost) * insulinSuppression * circadian * sleepBoost * deficitFactor);
+
+  // Эстерификация (хранение)
+  const baseEsterif = 0.10;
+  const insulinDriven = insulinSignal * 3.5;
+  const surplusFactor = calorieBalance &gt; 0 ? Math.min(2.0, calorieBalance / 500) : 0;
+  const dnl = surplusFactor * 0.4; // de novo lipogenesis
+  const esterification = baseEsterif * (1 + insulinDriven) * (1 + surplusFactor) + dnl;
+
+  const netFatFlux = lipolysis - esterification;
+
+  // MPS (синтез мышечного белка)
+  const baseMps = 0.03;
+  let mealMps = 0;
+  for (const meal of foodLogs) {
+    if ((meal.protein||0) &lt; 15) continue;
+    const hoursSince = hour - (meal.timestamp - dayStartTs) / 3600e3;
+    if (hoursSince &lt; 0 || hoursSince &gt; 3.5) continue;
+    const intensity = Math.min(1, (meal.protein||0) / 35);
+    mealMps += intensity * 2.0 * (1 - hoursSince / 3.5);
+  }
+  let trainingBoost = 1.0;
+  for (const w of activities.filter(a =&gt; a.type === 'workout' &amp;&amp; a.subtype === 'strength')) {
+    const hoursSince = hour - (w.timestamp - dayStartTs) / 3600e3;
+    if (hoursSince &lt; 0 || hoursSince &gt; 36) continue;
+    trainingBoost = Math.max(trainingBoost, 0.7 + 1.5 * Math.exp(-hoursSince / 10));
+  }
+  const sleepFactor = isSleepingHour ? 0.15 : 1.0;
+  const energyFactor = calorieBalance &lt; 0 ? 0.5 : 1.0;
+  const mps = (baseMps + mealMps) * trainingBoost * sleepFactor * energyFactor;
+
+  // MPB (распад мышечного белка)
+  let mpb = 0.06;
+  if (isSleepingHour) mpb = 0.13;
+  let lastMealHour = -Infinity;
+  for (const meal of foodLogs) {
+    const mh = (meal.timestamp - dayStartTs) / 3600e3;
+    if (mh &lt;= hour &amp;&amp; mh &gt; lastMealHour) lastMealHour = mh;
+  }
+  const fastingHours = lastMealHour &gt; -Infinity ? hour - lastMealHour : hour;
+  if (fastingHours &gt; 5) mpb *= 1.25;
+  if (fastingHours &gt; 9) mpb *= 1.15;
+
+  const netMuscle = mps - mpb;
+  return { lipolysis, esterification, netFatFlux, netMuscle };
+}
+
+// simulateDay — интеграция по часам (шаг 0.25 ч), возвращает итоги за сегодня + snapshots
+export function simulateDay(foodLogs: FoodLog[], activities: Activity[], calorieBalance: number) {
+  const now = new Date();
+  const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
+  const dayStartTs = dayStart.getTime();
+  const currentHour = (now.getTime() - dayStartTs) / 3600e3;
+  const step = 0.25;
+  let netFatToday = 0, fatOxidized = 0, fatStored = 0, muscleToday = 0;
+  const snapshots: Array&lt;HourlyRate &amp; {hour: number}&gt; = [];
+  for (let h = 0; h &lt;= currentHour + 1e-9; h += step) {
+    const hh = Math.min(h, currentHour);
+    const r = computeHourlyRate(hh, dayStartTs, foodLogs, activities, calorieBalance);
+    snapshots.push({ hour: hh, ...r });
+    if (snapshots.length &gt; 1) {
+      const prev = snapshots[snapshots.length - 2];
+      const dh = hh - prev.hour;
+      if (dh &gt; 0) {
+        netFatToday  += (r.netFatFlux + prev.netFatFlux) / 2 * dh;
+        fatOxidized  += (r.lipolysis + prev.lipolysis) / 2 * dh;
+        fatStored    += (r.esterification + prev.esterification) / 2 * dh;
+        muscleToday  += (r.netMuscle + prev.netMuscle) / 2 * dh;
+      }
+    }
+  }
+  const current = snapshots[snapshots.length - 1] ?? {
+    lipolysis: 0, esterification: 0, netFatFlux: 0, netMuscle: 0,
+  };
+  return {
+    currentLipolysis: current.lipolysis,
+    currentEsterification: current.esterification,
+    currentNetFatFlux: current.netFatFlux,
+    currentMuscle: current.netMuscle,
+    netFatToday, fatOxidized, fatStored, muscleToday,
+    currentHour, snapshots,
+  };
+}</code></pre>
+
+  <div class="callout warn">
+    <p><strong>Знак:</strong> <code>netFatFlux &lt; 0</code> = жир сжигается. На карте отображается <code>fatDisplayRate = -netFatFlux</code> (то есть отрицательное значение = сжигание, смотри <code>ProcessCard</code>: для жира <code>isGood = currentDisplayRate &lt; -0.05</code>, где <code>currentDisplayRate = -netFatFlux</code>).</p>
+  </div>
+
+  <h3>6.4 Оценка цели</h3>
+
+  <p><code>assessGoal({ targetType, targetValue, targetDate, baseline, tdee })</code> возвращает объект с полями:<br>
+  <code>isFeasible, verdict, direction, targetType, targetValue, targetUnit, currentValue, targetDelta, dailyCalorieAdjustment, targetCalories, targetProtein, targetFat, targetCarbs, weeklyRateNeeded, monthlyRateNeeded, limitDescription, realisticDate, daysAvailable, originalDate</code>.</p>
+
+  <p>Правила (кратко, полный код — в прототипе, строки ~340–390):</p>
+
+  <ul>
+    <li><strong>weight / fatPercent:</strong> лимит <code>min(1% массы, 1 кг)/нед</code>. Если превышен → <code>isFeasible=false</code>, <code>realisticDate</code> = сегодня + (дельта / лимит) дней.</li>
+    <li><strong>musclePercent:</strong> лимит <code>1.5% массы/мес</code>.</li>
+    <li><strong>Коррекция калорий:</strong> при похудении <code>dAdj</code> в диапазоне <code>[-25%, -15%]</code> TDEE; при агрессивной цели — всегда <code>-25%</code>. При наборе мышц — <code>+200..+300</code>.</li>
+    <li><strong>Макросы:</strong> белок <code>2.0 г/кг</code> (похудение) или <code>1.8</code> (набор), жир <code>25%</code> калорий, углеводы = остаток.</li>
+    <li>Сохраняется снапшот <code>assessment</code> в <code>goals.assessment</code> (jsonb) — чтобы UI не пересчитывал.</li>
+  </ul>
+
+  <h3>6.5 Производные планы</h3>
+
+  <p><code>computePlan(goal, baseline)</code> → <code>{ fatPerDay, musclePerDay, days }</code> (г/день). Логика — в прототипе (строки ~200–230). Значения используются в <code>ProcessCard.planDisplayValue</code>:</p>
+
+  <ul>
+    <li>жир: <code>-plan.fatPerDay</code></li>
+    <li>мышцы: <code>+plan.musclePerDay</code></li>
+  </ul>
+
+  <!-- ═══════════════ 7. API ═══════════════ -->
+
+  <h2 id="s7" class="major"><span class="num">7.</span> API-слой (React Query hooks)</h2>
+
+  <p>Каждый домен — свой хук. Примеры:</p>
+
+<pre><code>// useFoodLogs.ts
+export function useFoodLogs(range: 'today'|'week'|'month'|'all' = 'today') {
+  const supabase = useSupabase();
+  return useQuery({
+    queryKey: ['food_logs', range],
+    queryFn: async () =&gt; {
+      let q = supabase.from('food_logs').select('*').order('consumed_at', { ascending: false });
+      if (range === 'today') q = q.gte('consumed_at', startOfDay(new Date()).toISOString());
+      const { data, error } = await q;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateFoodLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: NewFoodLog) =&gt; {
+      const { data, error } = await supabase.from('food_logs').insert(input).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () =&gt; {
+      qc.invalidateQueries({ queryKey: ['food_logs'] });
+      qc.invalidateQueries({ queryKey: ['daily_history'] });
+    },
+  });
+}</code></pre>
+
+  <p>Аналогично: <code>useInBodyLogs</code>, <code>useActivities</code>, <code>useDishes</code>, <code>useGoal</code>, <code>useDailyHistory</code>, <code>useProfile</code>.</p>
+
+  <p><strong>Оптимистичные апдейты</strong> для удаления/редактирования — обязательно (иначе UI дёргается).</p>
+
+  <h3>7.1 Baseline</h3>
+
+<pre><code>export function useBaseline() {
+  const { data: logs } = useInBodyLogs();
+  const { data: profile } = useProfile();
+  return useMemo(() =&gt; {
+    const latest = logs?.[0]; // отсортировано по measured_at desc
+    if (!latest || !profile) return null;
+    return {
+      ...latest,
+      name: profile.name, age: profile.age, gender: profile.gender,
+      height: profile.height_cm, activityLevel: profile.activity_level,
+    };
+  }, [logs, profile]);
+}</code></pre>
+
+  <h3>7.2 Сегодняшние агрегаты (<code>todayData</code>)</h3>
+
+  <p>Считается на клиенте в <code>useMemo</code> (как в прототипе, строки ~1100–1140):</p>
+  <ul>
+    <li><code>todayFoods</code> — food_logs за сегодня.</li>
+    <li><code>macros</code> — сумма protein/fat/carbs.</li>
+    <li><code>calC</code> — сумма калорий.</li>
+    <li><code>wCal</code> — сумма калорий тренировок.</li>
+    <li><code>sleepH</code> — сумма часов сна за сегодня.</li>
+    <li><code>hasStr</code> — была ли силовая.</li>
+    <li><code>bmr</code> — из latest inbody_log.</li>
+    <li><code>tdee = calculateTDEE(...)</code>, <code>balance = calC - tdee</code>.</li>
+  </ul>
+
+  <h3>7.3 Симуляция</h3>
+
+<pre><code>const sim = useMemo(
+  () =&gt; todayData ? simulateDay(foodLogs, activities, todayData.balance) : null,
+  [foodLogs, activities, todayData?.balance, tick],
+);</code></pre>
+
+  <p><code>tick</code> — <code>useState(0)</code>, инкремент раз в 60 секунд через <code>setInterval</code> (см. прототип).</p>
+
+  <!-- ═══════════════ 8. ЭКРАНЫ ═══════════════ -->
+
+  <h2 id="s8" class="major"><span class="num">8.</span> Функциональные требования по экранам</h2>
+
+  <h3>8.1 Auth (<code>/login</code>)</h3>
+  <ul>
+    <li>Вкладки Вход / Регистрация.</li>
+    <li>Ошибки Supabase → <code>.auth-error</code>.</li>
+    <li>Кнопка «Войти» / «Создать аккаунт».</li>
+    <li>После успеха → редирект на <code>/</code> (или <code>/onboarding</code> если нет inbody_log).</li>
+  </ul>
+
+  <h3>8.2 Онбординг (<code>/onboarding</code>)</h3>
+  <ul>
+    <li>Поля: имя, возраст, пол, рост, вес, % жира, % мышц, активность.</li>
+    <li>Live-расчёт BMR.</li>
+    <li>Кнопка «Начать» → пишет профиль + первый inbody_log.</li>
+  </ul>
+
+  <h3>8.3 Карта (<code>/</code>) — главный экран</h3>
+
+  <p>Двухколоночный layout: 3D + процессы слева, статистика справа.</p>
+
+  <ul>
+    <li><strong>3D-модель</strong> (<code>Body3D</code>): Three.js сцена 1:1 из прототипа (голова, шея, торс, руки, ноги). Три «оболочки» (fat зелёный, lipo красный, muscle синий) с <code>AdditiveBlending</code> и пульсацией. Вращение мышью/тачем.</li>
+    <li><strong>Две ProcessCard:</strong>
+      <ul>
+        <li>🔥 Жир: rate <code>-netFatFlux</code>, breakdown (липолиз/эстерификация), today, план, прогресс-бар vs время дня, статус (опережение/в графике/отставание), sparkline, контекст.</li>
+        <li>💪 Мышцы: rate <code>netMuscle</code>, today, план, аналогично.</li>
+      </ul>
+    </li>
+    <li><strong>Статистика (правая колонка):</strong>
+      <ul>
+        <li>Энергобаланс (баланс + план + норма ккал).</li>
+        <li>КБЖУ сегодня с прогресс-барами к плану.</li>
+        <li>Сон.</li>
+        <li>Кнопка «🎯 Поставить цель» (если цели нет) или «+ Добавить активность».</li>
+      </ul>
+    </li>
+    <li><strong>История активностей</strong> под картой (<code>ActivityHistory</code>): группировка по дням, свёрнутые дни, внутри — по типам (🍽 / 🏋️ / 😴 / 🚶), кнопки ✎ / ×.</li>
+    <li>Floating-дельты поверх 3D (↓ сожжено, ↑ накоплено, ↑ мышц).</li>
+  </ul>
+
+  <p><strong>Если данных за сегодня нет</strong> — заглушка «Добавь еду и тренировки, чтобы увидеть прогноз», 3D-анимация в покое.</p>
+
+  <h3>8.4 Цель (<code>/goal</code>)</h3>
+  <ul>
+    <li>Селект: Вес (кг) / % жира / % мышц.</li>
+    <li>Числовое значение + дата.</li>
+    <li>Кнопка «Рассчитать» — считает <code>assessGoal</code> локально (не нужно писать в БД, пока не «Сохранить»).</li>
+    <li><strong>Результат:</strong> вердикт (✓ реалистично / ! слишком агрессивно), текущее значение, цель, дневной дефицит/профицит, реалистичная дата.</li>
+    <li>Дневные цели КБЖУ (калории, белки, жиры, углеводы).</li>
+    <li>Дневные планы по составу тела (г/день).</li>
+    <li>Если цель нереалистична → предупреждение <code>.goal-warning</code>.</li>
+    <li>При сохранении:
+      <ol>
+        <li><code>update goals set is_active = false where user_id = ... and is_active = true</code></li>
+        <li><code>insert goals</code> с <code>assessment</code> (jsonb) и <code>is_active = true</code>.</li>
+        <li>Инвалидировать <code>goal</code>.</li>
+      </ol>
+    </li>
+  </ul>
+
+  <h3>8.5 Рацион (<code>/dishes</code>)</h3>
+  <ul>
+    <li>Сетка карточек блюд (имя, КБЖУ, кнопки ✎ ×).</li>
+    <li>Кнопка «+ Блюдо» → <code>DishEditor</code>.</li>
+    <li><code>DishEditor</code>: name, calories, protein, fat, carbs. Валидация: name обязателен.</li>
+    <li>При сохранении нового блюда проверить <code>unique (user_id, lower(name))</code> — если конфликт, показать тост «Блюдо с таким названием уже есть».</li>
+  </ul>
+
+  <h3>8.6 Журнал (<code>/journal</code>)</h3>
+
+  <p>Две под-вкладки: <strong>📊 Графики</strong> и <strong>📋 Замеры InBody</strong>.</p>
+
+  <h4>Графики:</h4>
+  <ul>
+    <li>Фильтр День/Неделя/Месяц.</li>
+    <li>5–8 SVG-графиков: вес, % жира, % мышц, (липолиз/липогенез/мышцы-net — если есть данные), энергобаланс.</li>
+    <li>На графиках веса/% — жёлтая пунктирная линия «цель» + жёлтая пунктирная «план» (<code>computePlanSeries</code>).</li>
+    <li>Таблица истории: дата, вес, % жира, % мышц, ккал, баланс, [липолиз, липогенез].</li>
+    <li><strong>ВАЖНО:</strong> в проде данные для графиков брать из <code>daily_history</code>, а сегодняшнюю точку добавлять из <code>sim</code> + <code>todayData</code> (как в прототипе).</li>
+  </ul>
+
+  <h4>InBody:</h4>
+  <ul>
+    <li>Список замеров по убыванию даты.</li>
+    <li>У каждого: дата, бейдж «текущий» (у самого свежего), значения + дельта относительно предыдущего замера (цвет: % жира ↓ зелёный, % мышц ↑ зелёный, вес/ИМТ нейтральный).</li>
+    <li>Кнопка «+ Замер» → <code>InBodyEditor</code>.</li>
+    <li><code>InBodyEditor</code>: дата, вес, % жира, % мышц, BMR, ИМТ. Вес → автопересчёт ИМТ.</li>
+    <li>После insert/update/delete — пересчитать baseline (см. §7.1) и инвалидировать <code>inbody_logs</code>, <code>profile</code>, <code>daily_history</code>, <code>goal</code> (assessment мог устареть).</li>
+  </ul>
+
+  <h3>8.7 Справка (<code>/help</code>)</h3>
+  <p>Аккордеон с секциями: BMR, TDEE, TEF, Липолиз, Эстерификация, Баланс жира, InBody, Рацион. Формулы — в <code>&lt;div class="formula"&gt;</code>. Публичная (доступна без auth) — или только внутри (по желанию).</p>
+
+  <h3>8.8 Профиль (мобильная вкладка)</h3>
+  <ul>
+    <li>Аватар + имя.</li>
+    <li>Возраст, рост, вес, % жира, % мышц, BMR.</li>
+    <li>Активная цель.</li>
+    <li>Кнопки: 📖 Справка, + Новый замер, Выйти.</li>
+  </ul>
+
+  <h3>8.9 Логгер активности (модалка)</h3>
+
+  <p>4 таба: 🍽 Еда / 🏋️ Тренировка / 😴 Сон / 🚶 Прочее.</p>
+
+  <p><strong>Еда:</strong></p>
+  <ul>
+    <li>Шаг 1: выбор блюда из каталога (список <code>.dish-pick-item</code>) + кнопка «+ Новое блюдо».</li>
+    <li>Шаг 2: форма с предзаполненными КБЖУ (можно менять — не влияет на каталог).</li>
+    <li>При сохранении нового имени (не из каталога) — авто-добавить в <code>dishes</code> (сохранить это поведение прототипа; либо сделать настройку — по желанию).</li>
+  </ul>
+
+  <p><strong>Тренировка:</strong></p>
+  <ul>
+    <li>subtype: strength / cardio / volleyball / padel / tennis / football / basketball.</li>
+    <li>Длительность (мин), Калории.</li>
+    <li>Для спорта — кнопка/переключатель «авто по MET» (при смене subtype или duration — пересчёт <code>calcMETCalories</code>).</li>
+  </ul>
+
+  <p><strong>Сон:</strong> часы + качество 1–5.</p>
+
+  <p><strong>Прочее:</strong> подтип (walk / work_sit / work_stand / chill) + длительность.</p>
+
+  <p>Редактирование: заголовок «Редактирование» + бейдж <code>edit</code>, при сохранении — update по id.</p>
+
+  <!-- ═══════════════ 9. МОБИЛЬНЫЙ UX ═══════════════ -->
+
+  <h2 id="s9" class="major"><span class="num">9.</span> Мобильный UX</h2>
+
+  <p><code>useMediaQuery('(max-width: 768px)')</code>:</p>
+
+  <ul>
+    <li><strong>Desktop:</strong> header с логотипом + табами + аватар + logout. Layout с 2 колонками.</li>
+    <li><strong>Mobile:</strong>
+      <ul>
+        <li><code>.mobile-header</code> (sticky) с логотипом и аватаром-кнопкой → профиль.</li>
+        <li><code>.mobile-content</code> с паддингами.</li>
+        <li><code>.mobile-nav</code> (fixed bottom): Карта / Цель / [➕] / Рацион / Журнал.</li>
+        <li>Модалки — <code>.modal-backdrop</code> <code>align-items: flex-end</code>, скругление только сверху, <code>max-height: 85vh</code>.</li>
+        <li>3D-блок 280px, процессы друг под другом.</li>
+        <li>Тосты — <code>bottom: 80px</code>.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <p>Все стили — <strong>скопировать из прототипа 1:1</strong> (CSS-переменные, классы). Если переводишь на Tailwind — сохрани визуал (цвета <code>--bg #080b14</code>, <code>--fat #f97316</code>, <code>--muscle #3b82f6</code>, <code>--accent #8b5cf6</code>, <code>--goal #eab308</code>).</p>
+
+  <!-- ═══════════════ 10. DEMO ═══════════════ -->
+
+  <h2 id="s10" class="major"><span class="num">10.</span> Demo-режим (рекомендация)</h2>
+
+  <p>В прототипе был «⚡ Демо» без регистрации. Варианты для прода:</p>
+  <ol>
+    <li><strong>Рекомендуется:</strong> <code>supabase.auth.signInAnonymously()</code> + флаг <code>profiles.is_demo = true</code>. При первом входе засеять демо-данные. Дать плашку «Демо-режим, данные удалятся» и кнопку «Создать аккаунт».</li>
+    <li>Не делать вовсе (только регистрация).</li>
+  </ol>
+
+  <p>Если выберешь вариант 1 — добавь <code>is_demo boolean default false</code> в <code>profiles</code>, edge-функцию <code>seed_demo_data(user_id)</code> на SQL/PLpgSQL, и cron (напр. Supabase scheduled function) для очистки анонимных пользователей старше 7 дней.</p>
+
+  <!-- ═══════════════ 11. МИГРАЦИЯ ═══════════════ -->
+
+  <h2 id="s11" class="major"><span class="num">11.</span> Миграция данных из demo (опционально)</h2>
+
+  <p>Если пользователь заходит и в <code>localStorage</code> есть <code>metabo_data_&lt;email&gt;</code> — предложить импорт:</p>
+  <ul>
+    <li>Прочитать объект.</li>
+    <li>Пакетно <code>insert</code> в <code>inbody_logs</code>, <code>food_logs</code>, <code>activities</code>, <code>dishes</code>, <code>goals</code>, <code>daily_history</code>.</li>
+    <li>Очистить <code>localStorage</code>.</li>
+    <li>Показать тост «Импортировано N записей».</li>
+  </ul>
+  <p>Это необязательно, но приятный «плюс» для существующих пользователей прототипа.</p>
+
+  <!-- ═══════════════ 12. ENV ═══════════════ -->
+
+  <h2 id="s12" class="major"><span class="num">12.</span> Переменные окружения</h2>
+
+  <p><code>.env.local</code> (не коммитить) и Vercel Environment Variables:</p>
+
+<pre><code>VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOi...</code></pre>
+
+  <p><code>supabase.ts</code>:</p>
+
+<pre><code>import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/db';
+
+export const supabase = createClient&lt;Database&gt;(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
+);</code></pre>
+
+  <div class="callout warn">
+    <p>Секретный <strong>service_role</strong> ключ — никогда во фронт; только в edge-функциях / миграциях.</p>
+  </div>
+
+  <!-- ═══════════════ 13. ДЕПЛОЙ ═══════════════ -->
+
+  <h2 id="s13" class="major"><span class="num">13.</span> Деплой на Vercel</h2>
+
+  <ol>
+    <li><code>npm create vite@latest metabo -- --template react-ts</code></li>
+    <li>Установить зависимости из §2.</li>
+    <li>Создать проект Supabase, применить миграцию, включить Email/Password Auth, настроить Redirect URLs (<code>https://&lt;vercel-domain&gt;/auth/callback</code>).</li>
+    <li><code>vercel link</code>, <code>vercel env add</code> (или через dashboard).</li>
+    <li><code>vercel deploy --prod</code>.</li>
+    <li>Добавить <code>vercel.json</code> для SPA-fallback:
+<pre><code>{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }</code></pre>
+    </li>
+    <li>В Supabase → Auth → URL Configuration: Site URL = прод-домен, Redirect URLs — все варианты.</li>
+  </ol>
+
+  <!-- ═══════════════ 14. QA ═══════════════ -->
+
+  <h2 id="s14" class="major"><span class="num">14.</span> Чеклист приёмки (QA)</h2>
+
+  <ul class="checklist">
+    <li>Регистрация нового пользователя → онбординг → карта.</li>
+    <li>Логин / логаут / refresh сессии (перезагрузить страницу — сессия сохраняется).</li>
+    <li>Второй пользователь <strong>не видит</strong> данные первого (проверить RLS через прямой API-запрос без JWT → 0 строк).</li>
+    <li>После создания <code>food_log</code> карта пересчитывается, цифры сходятся с ручным расчётом по §6.</li>
+    <li>При удалении последнего <code>inbody_log</code> baseline переключается на предыдущий; при удалении всех — предложение пройти онбординг заново.</li>
+    <li>Цель: установка → сохранение в БД → отображение в карте (план, прогресс-бары) → редактирование → удаление.</li>
+    <li>Графики: линия «план» и «цель» отображаются, точки на графике соответствуют <code>daily_history</code>.</li>
+    <li>3D-модель вращается мышью и тачем.</li>
+    <li>Мобильная вёрстка: нижняя навигация, модалки снизу, safe-area-inset.</li>
+    <li>Тосты об успехе/ошибке на всех мутациях.</li>
+    <li>Loading-скелетоны на всех запросах; error state с retry при падении Supabase.</li>
+    <li>Валидация форм: пустые поля, отрицательные числа, пустая дата — показывают ошибки, не пишут в БД.</li>
+    <li><code>supabase gen types</code> → типы совпадают со схемой; нет <code>any</code> в хуках.</li>
+    <li>Unit-тесты на <code>simulateDay</code> (эталонный день → ожидаемые значения ±0.01).</li>
+    <li><code>npm run build</code> без warnings, <code>tsc --noEmit</code> чистый.</li>
+    <li>Lighthouse mobile ≥ 85.</li>
+  </ul>
+
+  <!-- ═══════════════ 15. ЧТО НЕ ДЕЛАТЬ ═══════════════ -->
+
+  <h2 id="s15" class="major"><span class="num">15.</span> Что НЕ делать</h2>
+
+  <ul>
+    <li>❌ Не использовать <code>localStorage</code> для данных (только Supabase Auth session — это делает SDK).</li>
+    <li>❌ Не хранить вес/% жира/% мышц в <code>profiles</code> — они живут в <code>inbody_logs</code> (baseline = latest).</li>
+    <li>❌ Не дублировать расчёт TDEE на сервере — он лёгкий и детерминированный, достаточно клиента. <code>daily_history</code> при желании считать edge-функцией по расписанию (cron 00:05), но это опционально.</li>
+    <li>❌ Не менять формулы «на глазок» — цифры в UI должны 1:1 совпадать с прототипом.</li>
+    <li>❌ Не выносить секретный ключ Supabase во фронт.</li>
+    <li>❌ Не делать real-time подписки, если не требуется — это усложняет код. Достаточно <code>invalidateQueries</code> после мутаций.</li>
+    <li>❌ Не забывать про <code>onAuthStateChange</code> (иначе после logout останутся данные).</li>
+  </ul>
+
+  <!-- ═══════════════ 16. УЛУЧШЕНИЯ ═══════════════ -->
+
+  <h2 id="s16" class="major"><span class="num">16.</span> Опциональные улучшения (не блокируют MVP)</h2>
+
+  <ul>
+    <li>Экспорт данных в CSV.</li>
+    <li>Push-уведомления (если развернуть PWA).</li>
+    <li>Импорт InBody по фото (OCR) — Supabase Storage + edge-функция.</li>
+    <li>Дневник настроения/самочувствия.</li>
+    <li>Реалтайм-синхронизация между устройствами (Supabase Realtime на <code>food_logs</code>, <code>activities</code>).</li>
+    <li>Тёмная/светлая тема (сейчас только тёмная).</li>
+    <li>i18n (ru → en).</li>
+  </ul>
+
+  <!-- ═══════════════ 17. ПРОТОТИП ═══════════════ -->
+
+  <h2 id="s17" class="major"><span class="num">17.</span> Ссылка на прототип</h2>
+
+  <p>Исходный HTML-файл <code>MetaBol.txt</code> прилагается рядом с этим документом. Он содержит:</p>
+  <ul>
+    <li>Полный CSS (скопировать без изменений или перевести на Tailwind 1:1).</li>
+    <li>Полные React-компоненты (переписать на TS + разбить по папкам).</li>
+    <li>Полные математические функции (§6) — <strong>не менять</strong>.</li>
+    <li>Three.js-сцену (§8.3) — <strong>не менять геометрию и материалы</strong>.</li>
+  </ul>
+
+  <div class="callout ok">
+    <p><strong>Приоритет:</strong> <strong>сначала</strong> инфраструктура (Supabase + auth + RLS), <strong>потом</strong> перенос логики, <strong>потом</strong> UI 1:1, <strong>в конце</strong> — тесты и деплой.</p>
+  </div>
+
+  <p>Удачи. Если что-то в спецификации неоднозначно — выбирай более простое production-решение и оставляй комментарий <code>// DECISION:</code> в коде.</p>
+
+  <hr>
+  <p style="text-align:center; color:#999; font-size:9pt; font-family:-apple-system,sans-serif;">
+    — Конец документа · MetaBo Production Spec v1.0 —
+  </p>
+
+</div>
+</body>
+</html>
