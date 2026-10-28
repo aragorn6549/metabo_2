@@ -24,9 +24,9 @@ export function useMetaboStore(user) {
     setLoading(true);
     (async () => {
       try {
-        const [p, logs, ents, dishList, g] = await Promise.all([
+        const [p, logs, ents, dishList] = await Promise.all([
           db.fetchProfile(uid), db.fetchInBodyLogs(uid), db.fetchEntries(uid),
-          db.fetchDishes(uid), db.fetchActiveGoal(uid),
+          db.fetchDishes(uid),
         ]);
         if (!alive) return;
         setProfile(p);
@@ -34,11 +34,17 @@ export function useMetaboStore(user) {
         setFoodLogs(ents.foodLogs);
         setActivities(ents.activities);
         setDishes(dishList);
-        setGoal(g);
         // DECISION: history строим из inbody_logs (ТЗ §5: таблица history материализуется на клиенте)
-        setHistory(logs.map(l => ({
+        const hist = logs.map(l => ({
           date: l.date, weight: l.weight, fatPercent: l.fatPercent, musclePercent: l.musclePercent,
-        })));
+        }));
+        setHistory(hist);
+        // цель нормализуем/чиним по baseline (последний замер), чтобы GoalTab не падал
+        // на undefined.toFixed в assessment из старых строк БД
+        const bl = p && logs.length ? db.buildBaseline(p, logs[logs.length - 1]) : null;
+        const g = await db.fetchActiveGoal(uid, bl);
+        if (!alive) return;
+        setGoal(g);
       } catch (e) {
         console.error('Load:', e);
       } finally {
@@ -115,8 +121,11 @@ export function useMetaboStore(user) {
   const saveInbody = async (entry) => {
     // DECISION: бросаем ошибку наверх — UI покажет честный toast вместо ложного «✓ добавлен»
     const saved = await db.upsertInBodyLog(uid, entry);
-    // локальный rand-id из редактора заменяем на реальный uuid строки из БД
-    const logs = entry.id ? inbodyLogs.map(l => l.id === entry.id ? saved : l) : [...inbodyLogs, saved];
+    // локальный id из редактора заменяем на реальный uuid строки из БД;
+    // если запись с entry.id в списке нет (например, удалена в другой сессии) — добавляем saved
+    const logs = inbodyLogs.some(l => l.id === entry.id)
+      ? inbodyLogs.map(l => l.id === entry.id ? saved : l)
+      : [...inbodyLogs.filter(l => l.id !== entry.id), saved];
     applyInbody(logs.sort((a, b) => new Date(a.date) - new Date(b.date)));
     return saved;
   };
