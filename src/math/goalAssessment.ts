@@ -1,6 +1,7 @@
 // DECISION: формулы скопированы из прототипа без изменений (ТЗ §6.4–6.5)
 function computePlan(goal, baseline) {
   if (!goal || !goal.assessment) return null;
+  if (!baseline) return null; // цель могла прийти из БД раньше, чем прогрузится baseline
   const days = Math.max(1, goal.assessment.daysAvailable);
   let fatPerDay = 0, musclePerDay = 0;
   if (goal.targetType === 'weight') {
