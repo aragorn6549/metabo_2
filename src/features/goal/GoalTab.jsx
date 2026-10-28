@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
@@ -24,22 +24,36 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
     const n = +v;
     return Number.isFinite(n) ? String(+n.toFixed(1)) : '';
   };
+  // DECISION: если цель не задана — поле «Значение» ВСЕГДА отражает последний замер InBody.
+  // Реализация — «управляемое значение с фолбэком»: localValue === null означает
+  // «использовать последний замер». Как только baseline догрузился (или появился новый
+  // замер / сменился параметр) — в поле автоматически подставляется его значение; ручной
+  // ввод пользователя сохраняется в localValue и не перетирается, пока не изменится
+  // параметр или сам замер. Предыдущие версии через useEffect были ненадёжны: NumberInput
+  // отдаёт число, сравнение со строкой давало вечную «ложь», и эффект не вызывал setState.
+  const hasGoalAssessment = !!goal?.assessment;
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
-  const [targetValue, setTargetValue] = useState(() => goal?.targetValue ?? baselineValueFor(goal?.targetType || 'weight'));
+  const [localValue, setLocalValue] = useState(null);
+  // localValue != null — пользователь ввёл своё значение вручную (или нажал «Рассчитать»)
+  const manualInput = localValue != null;
+
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
 
-  // DECISION: если цель не задана — поле «Значение» всегда отражает последний замер;
-  // при смене параметра (вес / % жира / % мышц) подставляем значение из baseline.
-  // Если пользователь уже поставил цель (есть assessment) — его вводимые значения не трогаем.
-  useEffect(() => {
-    if (!goal?.assessment) {
-      setTargetValue(baselineValueFor(targetType));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetType, goal?.assessment]);
+  const baselineKey = `${baseline?.id ?? ''}|${baseline?.date ?? ''}`;
+  const syncedForRef = useRef(null);
+  const syncKey = `${hasGoalAssessment ? 'g' : '-'}|${targetType}|${baselineKey}`;
+  if (syncedForRef.current !== syncKey) {
+    syncedForRef.current = syncKey;
+    setLocalValue(null); // сброс ручного ввода → фолбэк на актуальный замер/цель
+  }
+  const targetValue = (() => {
+    if (manualInput) return String(localValue);
+    if (hasGoalAssessment && goal?.targetValue != null) return String(+goal.targetValue);
+    return baselineValueFor(targetType); // цель не задана — значение из последнего замера
+  })();
   // Локальная оценка считается ТОЛЬКО по кнопке «Рассчитать» (не на каждый ввод).
   const [localAssessment, setLocalAssessment] = useState(null);
   const effectiveAssessment = localAssessment ?? goal?.assessment ?? null;
@@ -48,6 +62,9 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   const handleSave = () => {
     setLocalAssessment(null);
     if (targetValue === '' || !targetDate || !baseline || !tdee) return;
+    // фиксируем введённое значение как ручное — после «Рассчитать» поле не должно
+    // перетираться фолбэком на замер, даже если goal ещё не вернулся из БД
+    if (localValue == null) setLocalValue(targetValue);
     try {
       const a = assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
       ['currentValue', 'dailyCalorieAdjustment', 'targetCalories', 'targetProtein',
@@ -95,7 +112,7 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="musclePercent">% мышц</option>
             </select></div>
           <div className="field"><label>Значение ({unit})</label>
-            <NumberInput value={targetValue} onChange={v => setTargetValue(v)} placeholder="—" /></div>
+            <NumberInput value={targetValue} onChange={v => setLocalValue(v === "" ? null : v)} placeholder="—" /></div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
