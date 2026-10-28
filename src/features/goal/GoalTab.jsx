@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 
 import { assessGoal } from '@/lib/shared';
 import NumberInput from '@/components/NumberInput';
@@ -8,24 +8,27 @@ import NumberInput from '@/components/NumberInput';
 const numOr = (v, d = 0) => { const n = +v; return Number.isFinite(n) ? n : d; };
 const fmt = (v, d = 0, fb = '—') => { const n = +v; return Number.isFinite(n) ? n.toFixed(d) : fb; };
 
-// DECISION: вкладка «Цель» приведена строго 1:1 к прототипу (Презентация.html, GoalTab).
-// Отличия сборки были: лишние guard-условия в useMemo (скрывали нижний блок оценки, когда пример его показывает),
-// и двойная проверка instanceof Date для realisticDate. Guard оставлен только на самый ранний stage (!baseline/!tdee),
-// как в примере; числовые проверки убраны.
+// DECISION: empty state вкладки «Цель». Если цель ещё не поставлена (первый запуск или
+// удаление предыдущих целей), нижний блок НЕ рассчитывает оценку и НЕ показывает вердикты
+// («Реалистично» / «Слишком агрессивно») — пользователь ещё не задал цель.
+// Графа «Сейчас» берётся напрямую из замера InBody (baseline); «Цель», «Дневной профицит»,
+// «Реалистичная дата», КБЖУ — прочерк. Расчёт и вердикт появляются только после «Рассчитать».
 function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
   const [targetType, setTargetType] = useState(goal?.targetType || 'weight');
-  const [targetValue, setTargetValue] = useState(goal?.targetValue || 72);
+  // DECISION: без сохранённой цели поле «Значение» пустое (placeholder «—»), а не магическая 72.
+  const [targetValue, setTargetValue] = useState(goal?.targetValue ?? '');
   const [targetDate, setTargetDate] = useState(() => {
     if (goal?.targetDate) return goal.targetDate.slice(0, 10);
     const d = new Date(); d.setMonth(d.getMonth()+3); return d.toISOString().slice(0, 10);
   });
-  const assessment = useMemo(() => {
-    if (targetValue === '' || !targetDate) return null;
-    // DECISION: если данные ещё не прогрузились или baseline/tdee неполные (null fat_percent и т.п.),
-    // показываем сохранённую цель из БД (с числовыми fallback'ами), а не роняем экран.
-    if (!baseline || !tdee) {
-      return goal?.assessment ? { ...goal.assessment } : null;
-    }
+  // Локальная оценка считается ТОЛЬКО по кнопке «Рассчитать» (не на каждый ввод).
+  const [localAssessment, setLocalAssessment] = useState(null);
+  const effectiveAssessment = localAssessment ?? goal?.assessment ?? null;
+  const showDetails = !!effectiveAssessment; // до расчёта нет ни вердиктов, ни КБЖУ — только прочерки
+
+  const handleSave = () => {
+    setLocalAssessment(null);
+    if (targetValue === '' || !targetDate || !baseline || !tdee) return;
     try {
       const a = assessGoal({ targetType, targetValue: +targetValue, targetDate, baseline, tdee });
       ['currentValue', 'dailyCalorieAdjustment', 'targetCalories', 'targetProtein',
@@ -37,16 +40,25 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
       }
       if (typeof a.limitDescription !== 'string') a.limitDescription = '';
       if (!a.targetUnit) a.targetUnit = targetType === 'weight' ? 'кг' : '%';
-      return a;
+      setLocalAssessment(a);
+      onSetGoal({ targetType, targetValue: +targetValue, targetDate, assessment: a, createdAt: new Date().toISOString() });
     } catch (e) {
       console.error('assessGoal:', e);
-      return goal?.assessment ? { ...goal.assessment } : null;
     }
-  }, [targetType, targetValue, targetDate, baseline, tdee]);
-  const handleSave = () => {
-    if (!assessment) return;
-    onSetGoal({ targetType, targetValue: +targetValue, targetDate, assessment, createdAt: new Date().toISOString() });
   };
+
+  // Значение «Сейчас»: из сохранённой оценки (после расчёта), иначе напрямую из замера InBody.
+  const nowValue = (() => {
+    if (effectiveAssessment && Number.isFinite(+effectiveAssessment.currentValue)) return +effectiveAssessment.currentValue;
+    if (!baseline) return null;
+    const v = targetType === 'weight' ? baseline.weight
+      : targetType === 'fatPercent' ? baseline.fatPercent
+      : baseline.musclePercent;
+    return Number.isFinite(+v) ? +v : null;
+  })();
+
+  const unit = targetType === 'weight' ? 'кг' : '%';
+
   return (
     <div>
       <div className="goal-section">
@@ -63,74 +75,81 @@ function GoalTab({ baseline, tdee, goal, plan, onSetGoal }) {
               <option value="fatPercent">% жира</option>
               <option value="musclePercent">% мышц</option>
             </select></div>
-          <div className="field"><label>Значение ({targetType==='weight'?'кг':'%'})</label>
-            <NumberInput value={targetValue} onChange={v => setTargetValue(v)} /></div>
+          <div className="field"><label>Значение ({unit})</label>
+            <NumberInput value={targetValue} onChange={v => setTargetValue(v)} placeholder="—" /></div>
           <div className="field"><label>К дате</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} /></div>
           <button className="btn goal" onClick={handleSave} style={{ width:'auto', padding:'14px 24px' }}>Рассчитать</button>
         </div>
-        {assessment && (
-          <div className={`goal-result ${assessment.isFeasible?'feasible':'infeasible'}`}>
-            <div className="goal-verdict">
-              <div className={`verdict-icon ${assessment.isFeasible?'ok':'warn'}`}>{assessment.isFeasible?'✓':'!'}</div>
-              <span style={{ color: assessment.isFeasible?'var(--muscle-2)':'var(--fat)' }}>
-                {assessment.isFeasible?'Реалистично':'Слишком агрессивно'}
-              </span>
-            </div>
-            <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>{assessment.verdict}</div>
-            <div className="goal-details">
-              <div className="goal-detail"><div className="goal-detail-label">Сейчас</div>
-                <div className="goal-detail-value">{fmt(assessment.currentValue, 1)}{assessment.targetUnit}</div></div>
-              <div className="goal-detail"><div className="goal-detail-label">Цель</div>
-                <div className="goal-detail-value goal-color">{fmt(assessment.targetValue, 1)}{assessment.targetUnit}</div></div>
-              <div className="goal-detail"><div className="goal-detail-label">Дневной {assessment.direction==='loss'?'дефицит':'профицит'}</div>
-                <div className={`goal-detail-value ${assessment.isFeasible?'ok':'warn'}`}>
-                  {numOr(assessment.dailyCalorieAdjustment)>0?'+':''}{fmt(assessment.dailyCalorieAdjustment)} ккал</div></div>
-              <div className="goal-detail"><div className="goal-detail-label">Реалистичная дата</div>
-                <div className="goal-detail-value">
-                  {(assessment.realisticDate ? new Date(assessment.realisticDate) : new Date())
-                    .toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})}</div></div>
-            </div>
-            {!assessment.isFeasible && (
-              <div className="goal-warning">
-                ⚠ {assessment.limitDescription}. Сдвиньте дату на{' '}
-                <strong>{(assessment.realisticDate ? new Date(assessment.realisticDate) : new Date())
-                  .toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}</strong>{' '}
-                или менее амбициозную цель.
+        <div className={`goal-result ${showDetails ? (effectiveAssessment.isFeasible?'feasible':'infeasible') : ''}`}>
+          {showDetails && (
+            <>
+              <div className="goal-verdict">
+                <div className={`verdict-icon ${effectiveAssessment.isFeasible?'ok':'warn'}`}>{effectiveAssessment.isFeasible?'✓':'!'}</div>
+                <span style={{ color: effectiveAssessment.isFeasible?'var(--muscle-2)':'var(--fat)' }}>
+                  {effectiveAssessment.isFeasible?'Реалистично':'Слишком агрессивно'}
+                </span>
               </div>
-            )}
-            <div style={{ borderTop:'1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
-              <div className="stat-label" style={{ marginBottom: 10 }}>Дневные цели по КБЖУ</div>
-              <div className="goal-details">
-                <div className="goal-detail"><div className="goal-detail-label">Калории</div>
-                  <div className="goal-detail-value goal-color">{fmt(assessment.targetCalories)} ккал</div></div>
-                <div className="goal-detail"><div className="goal-detail-label">Белки</div>
-                  <div className="goal-detail-value">{fmt(assessment.targetProtein)} г</div></div>
-                <div className="goal-detail"><div className="goal-detail-label">Жиры</div>
-                  <div className="goal-detail-value">{fmt(assessment.targetFat)} г</div></div>
-                <div className="goal-detail"><div className="goal-detail-label">Углеводы</div>
-                  <div className="goal-detail-value">{fmt(assessment.targetCarbs)} г</div></div>
-              </div>
-            </div>
-            {plan && (Number.isFinite(+plan.fatPerDay) && +plan.fatPerDay > 0 || Number.isFinite(+plan.musclePerDay) && +plan.musclePerDay > 0) && (
-              <div style={{ borderTop:'1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
-                <div className="stat-label" style={{ marginBottom: 10 }}>Дневные планы по составу тела</div>
-                <div className="goal-details">
-                  {Number.isFinite(+plan.fatPerDay) && plan.fatPerDay > 0 && (
-                    <div className="goal-detail"><div className="goal-detail-label">Сжигание жира</div>
-                      <div className="goal-detail-value" style={{ color: 'var(--muscle-2)' }}>−{(+plan.fatPerDay).toFixed(0)} г/день</div></div>
-                  )}
-                  {Number.isFinite(+plan.musclePerDay) && plan.musclePerDay > 0 && (
-                    <div className="goal-detail"><div className="goal-detail-label">Синтез мышц</div>
-                      <div className="goal-detail-value" style={{ color: 'var(--muscle)' }}>+{(+plan.musclePerDay).toFixed(1)} г/день</div></div>
-                  )}
-                  <div className="goal-detail"><div className="goal-detail-label">Дней до цели</div>
-                    <div className="goal-detail-value">{assessment.daysAvailable}</div></div>
-                </div>
-              </div>
-            )}
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>{effectiveAssessment.verdict}</div>
+            </>
+          )}
+          <div className="goal-details">
+            <div className="goal-detail"><div className="goal-detail-label">Сейчас</div>
+              <div className="goal-detail-value">{nowValue != null ? `${nowValue.toFixed(1)}${unit}` : '—'}</div></div>
+            <div className="goal-detail"><div className="goal-detail-label">Цель</div>
+              <div className="goal-detail-value goal-color">
+                {showDetails ? `${fmt(effectiveAssessment.targetValue, 1)}${effectiveAssessment.targetUnit ?? unit}` : '—'}</div></div>
+            <div className="goal-detail"><div className="goal-detail-label">Дневной {effectiveAssessment?.direction==='loss'?'дефицит':'профицит'}</div>
+              <div className={`goal-detail-value ${showDetails ? (effectiveAssessment.isFeasible?'ok':'warn') : ''}`}>
+                {showDetails
+                  ? `${numOr(effectiveAssessment.dailyCalorieAdjustment)>0?'+':''}${fmt(effectiveAssessment.dailyCalorieAdjustment)} ккал`
+                  : '—'}</div></div>
+            <div className="goal-detail"><div className="goal-detail-label">Реалистичная дата</div>
+              <div className="goal-detail-value">
+                {showDetails
+                  ? (effectiveAssessment.realisticDate ? new Date(effectiveAssessment.realisticDate) : new Date())
+                      .toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})
+                  : '—'}</div></div>
           </div>
-        )}
+          {showDetails && !effectiveAssessment.isFeasible && (
+            <div className="goal-warning">
+              ⚠ {effectiveAssessment.limitDescription}. Сдвиньте дату на{' '}
+              <strong>{(effectiveAssessment.realisticDate ? new Date(effectiveAssessment.realisticDate) : new Date())
+                .toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}</strong>{' '}
+              или менее амбициозную цель.
+            </div>
+          )}
+          <div style={{ borderTop:'1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
+            <div className="stat-label" style={{ marginBottom: 10 }}>Дневные цели по КБЖУ</div>
+            <div className="goal-details">
+              <div className="goal-detail"><div className="goal-detail-label">Калории</div>
+                <div className="goal-detail-value goal-color">{showDetails ? `${fmt(effectiveAssessment.targetCalories)} ккал` : '—'}</div></div>
+              <div className="goal-detail"><div className="goal-detail-label">Белки</div>
+                <div className="goal-detail-value">{showDetails ? `${fmt(effectiveAssessment.targetProtein)} г` : '—'}</div></div>
+              <div className="goal-detail"><div className="goal-detail-label">Жиры</div>
+                <div className="goal-detail-value">{showDetails ? `${fmt(effectiveAssessment.targetFat)} г` : '—'}</div></div>
+              <div className="goal-detail"><div className="goal-detail-label">Углеводы</div>
+                <div className="goal-detail-value">{showDetails ? `${fmt(effectiveAssessment.targetCarbs)} г` : '—'}</div></div>
+            </div>
+          </div>
+          {showDetails && plan && (Number.isFinite(+plan.fatPerDay) && +plan.fatPerDay > 0 || Number.isFinite(+plan.musclePerDay) && +plan.musclePerDay > 0) && (
+            <div style={{ borderTop:'1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
+              <div className="stat-label" style={{ marginBottom: 10 }}>Дневные планы по составу тела</div>
+              <div className="goal-details">
+                {Number.isFinite(+plan.fatPerDay) && plan.fatPerDay > 0 && (
+                  <div className="goal-detail"><div className="goal-detail-label">Сжигание жира</div>
+                    <div className="goal-detail-value" style={{ color: 'var(--muscle-2)' }}>−{(+plan.fatPerDay).toFixed(0)} г/день</div></div>
+                )}
+                {Number.isFinite(+plan.musclePerDay) && plan.musclePerDay > 0 && (
+                  <div className="goal-detail"><div className="goal-detail-label">Синтез мышц</div>
+                    <div className="goal-detail-value" style={{ color: 'var(--muscle)' }}>+{(+plan.musclePerDay).toFixed(1)} г/день</div></div>
+                )}
+                <div className="goal-detail"><div className="goal-detail-label">Дней до цели</div>
+                  <div className="goal-detail-value">{effectiveAssessment.daysAvailable}</div></div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
