@@ -116,7 +116,7 @@ function getContextText(foodLogs, activities, now) {
 function assessGoal({ targetType, targetValue, targetDate, baseline, tdee }) {
   const now = new Date(), end = new Date(targetDate);
   const days = Math.max(1, Math.ceil((end-now)/86400000));
-  const weeks = days/7, months = days/30.4, cw = baseline.weight;
+  const weeks = days/7, months = days/30.4;
   let cur, delta, unit;
   // DECISION: baseline может прийти из БД с null-полями (fat_percent/muscle_percent не заполнены) —
   // без fallback здесь cur/delta становились undefined и весь рендер падал на «undefined.toFixed».
