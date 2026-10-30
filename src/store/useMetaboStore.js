@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { computeTDEE, computePlan, computeEnergyBalance } from '../math/calculations.js';
 import { upsertInBodyLog, fetchActiveGoal, saveGoal as dbSaveGoal, deleteGoal as dbDeleteGoal, normalizeGoalRow } from '../lib/db.js';
 
 // Safely coerce any numeric-ish value to a finite number; fallback on NaN/null/undefined
@@ -148,4 +147,5 @@ const useMetaboStore = create(
   )
 );
 
+export { useMetaboStore };
 export default useMetaboStore;
