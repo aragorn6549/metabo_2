@@ -1,0 +1,23 @@
+name: DeepSeek Code Review
+on:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: Lixiaoyiao/deepseek-harness-action@243926cbd3d013f07b364e188ff84826bfa6f678
+        with:
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
