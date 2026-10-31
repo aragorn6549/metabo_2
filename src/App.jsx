@@ -87,9 +87,47 @@ export default function App() {
     let alive = true;
     invalidateAdminCache();
     setIsAdmin(false);
-    if (user?.id) fetchIsAdmin(user.id).then(v => { if (alive) setIsAdmin(v); });
+    // DECISION: передаём объект user — роль может быть задана через app_metadata/user_metadata
+    // (работает без таблицы admin_roles, см. src/lib/admin.js)
+    if (user?.id) fetchIsAdmin(user.id, user).then(v => { if (alive) setIsAdmin(v); });
     return () => { alive = false; };
   }, [user?.id]);
+
+  // ИСПРАВЛЕНИЕ «админ зашёл, но админки не видит»:
+  // роль из метаданных зашита в JWT, а в localStorage может лежать СТАРАЯ сессия (выдана до
+  // назначения роли) — тогда user.app_metadata.role отсутствует, а запрос к admin_roles без
+  // выполненной миграции молча возвращает пусто. Поэтому при каждом обновлении токена
+  // (TOKEN_REFRESHED / SIGNED_IN / USER_UPDATED) принудительно перечитываем актуальный профиль
+  // через getUser() и перепроверяем роль. Плюс страховка: если проверка вернула false, повторяем
+  // её через 1.5 с (закрывает гонку «метаданные обновились на сервере, клиент держит старый токен»).
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let alive = true;
+    let retry = null;
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+      if (!alive) return;
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const { data } = await supabase.auth.getUser(); // свежий user с актуальными метаданными
+        if (!alive || !data?.user) return;
+        setUser(data.user);
+        invalidateAdminCache();
+        const v = await fetchIsAdmin(data.user.id, data.user);
+        if (alive) setIsAdmin(v);
+      }
+    });
+    if (!isAdmin) {
+      retry = setTimeout(async () => {
+        if (!alive) return;
+        const { data } = await supabase.auth.getUser();
+        if (!alive || !data?.user) return;
+        setUser(data.user);
+        invalidateAdminCache();
+        const v = await fetchIsAdmin(data.user.id, data.user);
+        if (alive && v) setIsAdmin(true);
+      }, 1500);
+    }
+    return () => { alive = false; sub.subscription.unsubscribe(); if (retry) clearTimeout(retry); };
+  }, [user?.id, isAdmin]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -463,9 +501,3 @@ function DemoApp({ onExit, showToast, toast }) {
     </div>
   );
 }
-
-
-
-
-
-if (user?.id) fetchIsAdmin(user.id, user).then(v => { if (alive) setIsAdmin(v); });
