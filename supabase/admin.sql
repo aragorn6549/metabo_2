@@ -112,7 +112,7 @@ on conflict (user_id) do nothing;
 -- ============================================================
 
 
-
+-- варинат В
 create or replace function public.is_admin(uid uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.admin_roles ar where ar.user_id = uid and ar.role = 'admin')
