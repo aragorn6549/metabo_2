@@ -110,3 +110,13 @@ on conflict (user_id) do nothing;
 -- (email admin@admin.ru, password admin123, "Auto Confirm User" = ON),
 -- затем повторно выполните INSERT выше.
 -- ============================================================
+
+
+
+create or replace function public.is_admin(uid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admin_roles ar where ar.user_id = uid and ar.role = 'admin')
+     or exists (select 1 from auth.users u where u.id = uid
+                and (u.raw_app_meta_data->>'role' = 'admin'
+                     or u.raw_user_meta_data->>'role' = 'admin'));
+$$;
