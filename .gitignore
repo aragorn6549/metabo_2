@@ -1,1 +1,30 @@
+# Зависимости — НЕ коммитить! (коммит node_modules ломал сборку на Vercel)
+node_modules/
+
+# Результат сборки
 dist/
+dist-ssr/
+build/
+
+# Логи
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Секреты окружения (пример .env.example остаётся в git)
+.env
+.env.local
+.env.*.local
+
+# Редакторы / ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Кэш
+.cache/
+.vercel/
+*.tsbuildinfo
