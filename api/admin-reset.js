@@ -31,9 +31,12 @@ export default async function handler(req, res) {
   await userClient.auth.setSession({ access_token: token, refresh_token: '' });
   const { data: ud } = await userClient.auth.getUser();
   if (!ud?.user) return res.status(401).json({ error: 'Сессия недействительна' });
+  const isAdminMeta = ud.user.app_metadata?.role === 'admin' || ud.user.user_metadata?.role === 'admin';
   const { data: roleRow, error: roleErr } = await userClient
     .from('admin_roles').select('user_id').eq('user_id', ud.user.id).eq('role', 'admin').maybeSingle();
-  if (roleErr || !roleRow) return res.status(403).json({ error: 'Требуется роль администратора' });
+  // Роль признаётся, если она задана через метаданные ИЛИ через таблицу admin_roles
+  // (совпадает с логикой src/lib/admin.js и серверной is_admin() из supabase/admin.sql)
+  if (!isAdminMeta && (roleErr || !roleRow)) return res.status(403).json({ error: 'Требуется роль администратора' });
 
   // 2) Двойная защита: тот же RPC в БД ещё раз проверяет is_admin(auth.uid())
   const rpcRes = await fetch(`${url}/rest/v1/rpc/admin_send_password_reset`, {
