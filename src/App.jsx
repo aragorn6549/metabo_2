@@ -463,3 +463,9 @@ function DemoApp({ onExit, showToast, toast }) {
     </div>
   );
 }
+
+
+
+
+
+if (user?.id) fetchIsAdmin(user.id, user).then(v => { if (alive) setIsAdmin(v); });
