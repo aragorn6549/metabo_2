@@ -110,3 +110,26 @@ on conflict (user_id) do nothing;
 -- (email admin@admin.ru, password admin123, "Auto Confirm User" = ON),
 -- затем повторно выполните INSERT выше.
 -- ============================================================
+
+
+
+export function isAdminFromMetadata(user) {
+  if (!user) return false;
+  return user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+}
+
+export async function fetchIsAdmin(userId, user = null) {
+  if (!userId) return false;
+  // Быстрый путь: роль в метаданных токена — работает даже без выполненной миграции admin.sql
+  if (isAdminFromMetadata(user)) {
+    adminCheckCache = { uid: userId, isAdmin: true };
+    return true;
+  }
+  if (adminCheckCache.uid === userId) return adminCheckCache.isAdmin;
+  const { data, error } = await supabase
+    .from('admin_roles').select('user_id, role')
+    .eq('user_id', userId).eq('role', 'admin').maybeSingle();
+  const isAdmin = !error && !!data;
+  adminCheckCache = { uid: userId, isAdmin };
+  return isAdmin;
+}
