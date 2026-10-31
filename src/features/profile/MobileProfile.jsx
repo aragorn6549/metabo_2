@@ -1,5 +1,5 @@
 
-function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpenHelp }) {
+function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpenHelp, onChangePassword }) {
   return (
     <div>
       <div className="mobile-page-title">Профиль</div>
@@ -40,6 +40,8 @@ function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpe
       <div style={{ display:'flex', flexDirection:'column', gap: 12, marginTop: 16 }}>
         <button className="btn secondary" onClick={onOpenHelp}>📖 Справка по методам</button>
         <button className="btn secondary" onClick={onUpdateBaseline}>+ Новый замер InBody</button>
+        {/* доп. ТЗ п.3: смена пароля залогиненным пользователем */}
+        <button className="btn secondary" onClick={onChangePassword}>🔑 Сменить пароль</button>
         <button className="btn danger" onClick={onLogout}>Выйти из аккаунта</button>
       </div>
     </div>
