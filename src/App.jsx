@@ -11,6 +11,9 @@ import Journal from '@/features/journal/Journal';
 import HelpTab from '@/features/help/HelpTab';
 import HelpContent from '@/features/help/HelpContent';
 import MobileProfile from '@/features/profile/MobileProfile';
+import AdminPanel from '@/features/admin/AdminPanel';
+import ChangePasswordModal from '@/features/account/ChangePasswordModal';
+import { fetchIsAdmin, invalidateAdminCache } from '@/lib/admin';
 import MobileNav from '@/components/MobileNav';
 import ActivityLogger from '@/features/activities/ActivityLogger';
 import InBodyEditor from '@/features/inbody/InBodyEditor';
@@ -63,6 +66,30 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [editingBaseline, setEditingBaseline] = useState(false);
+  // ===== Админка / пароли (доп. ТЗ) =====
+  const [isAdmin, setIsAdmin] = useState(false);        // роль из public.admin_roles
+  const [adminOpen, setAdminOpen] = useState(false);    // модалка списка пользователей
+  const [changePwOpen, setChangePwOpen] = useState(false); // модалка смены своего пароля
+  // ссылка восстановления из письма «Забыли пароль?» → #/auth?mode=recovery (implicit flow: токен в фрагменте)
+  const [recoveryMode, setRecoveryMode] = useState(() =>
+    typeof window !== 'undefined' && window.location.hash.includes('type=recovery'));
+
+  useEffect(() => {
+    // Событие PASSWORD_RECOVERY приходит, когда клиент обработал ссылку из письма —
+    // показываем форму задания нового пароля даже если пользователь открыл ссылку во вкладке с приложением.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    invalidateAdminCache();
+    setIsAdmin(false);
+    if (user?.id) fetchIsAdmin(user.id).then(v => { if (alive) setIsAdmin(v); });
+    return () => { alive = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -80,6 +107,7 @@ export default function App() {
     // DECISION: явный SIGNED_OUT обрабатываем здесь (в subscribe он игнорируется как ложный из init-фазы)
     setUser(null);
     setTab('map'); setMobileTab('map');
+    setAdminOpen(false); setChangePwOpen(false); setIsAdmin(false); setRecoveryMode(false);
   };
 
   const { baseline, foodLogs, activities, dishes, goal, history, inbodyLogs, todayData, sim, plan } = store;
@@ -161,7 +189,18 @@ export default function App() {
 
   if (!authChecked) return <div className="app" />;
   if (demo) return <DemoApp onExit={() => setDemo(false)} showToast={showToast} toast={toast} />;
-  if (!user) return <AuthScreen onDemo={() => { setTab('map'); setMobileTab('map'); setDemo(true); }} />;
+  // доп. ТЗ п.2: пользователь перешёл по ссылке восстановления из письма — задаём новый пароль
+  // прямо поверх приложения (сессия recovery уже активна, AuthScreen в режиме recovery обновит пароль).
+  if (!user || recoveryMode) {
+    return (
+      <AuthScreen
+        key={recoveryMode ? 'recovery' : 'login'}
+        onDemo={() => { setTab('map'); setMobileTab('map'); setDemo(true); }}
+        initialMode={recoveryMode ? 'recovery' : 'login'}
+        onRecovered={() => setRecoveryMode(false)}
+      />
+    );
+  }
   if (!baseline || editingBaseline) {
     return <OnboardingScreen key={editingBaseline ? 'edit' : 'new'} initial={baseline}
       onComplete={handleOnboardingComplete}
@@ -214,7 +253,7 @@ export default function App() {
           {mobileTab === 'profile' && (
             <MobileProfile user={userEmail} baseline={baseline} goal={goal}
               onLogout={handleLogout} onUpdateBaseline={openInbodyEditorNew}
-              onOpenHelp={() => setHelpOpen(true)} />
+              onOpenHelp={() => setHelpOpen(true)} onChangePassword={() => setChangePwOpen(true)} />
           )}
         </div>
         <MobileNav tab={mobileTab} onTab={setMobileTab} onAdd={openLoggerNew} />
@@ -234,6 +273,9 @@ export default function App() {
             </div>
           </div>
         )}
+        {/* доп. ТЗ: админка доступна и на мобильном — кнопка в шапке; смена пароля — из профиля */}
+        {isAdmin && <AdminPanel currentUserId={user.id} onClose={() => setAdminOpen(false)} showToast={showToast} />}
+        {changePwOpen && <ChangePasswordModal onClose={() => setChangePwOpen(false)} showToast={showToast} />}
         {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
       </div>
     );
@@ -250,7 +292,12 @@ export default function App() {
             <button className={`tab ${tab === 'dishes' ? 'active' : ''}`} onClick={() => setTab('dishes')}>Рацион</button>
             <button className={`tab ${tab === 'journal' ? 'active' : ''}`} onClick={() => setTab('journal')}>Журнал</button>
             <button className={`tab ${tab === 'help' ? 'active' : ''}`} onClick={() => setTab('help')}>📖 Справка</button>
+            {/* доп. ТЗ п.1: вкладка админки видна только пользователям с ролью admin */}
+            {isAdmin && (
+              <button className="tab admin-tab" onClick={() => setAdminOpen(true)}>🛡 Админка</button>
+            )}
           </div>
+          <button className="logout-btn" onClick={() => setChangePwOpen(true)} title="Сменить пароль">🔑 Пароль</button>
           <div className="mobile-avatar" style={{ cursor: 'pointer' }} title={userEmail}>
             {(baseline.name || userEmail).charAt(0).toUpperCase()}
           </div>
@@ -280,6 +327,8 @@ export default function App() {
           onDeleteInbody={handleDeleteInbody} onAddInbody={openInbodyEditorNew} />
       )}
       {tab === 'help' && <HelpTab />}
+      {isAdmin && <AdminPanel currentUserId={user.id} onClose={() => setAdminOpen(false)} showToast={showToast} />}
+      {changePwOpen && <ChangePasswordModal onClose={() => setChangePwOpen(false)} showToast={showToast} />}
       {loggerOpen && <ActivityLogger baseline={baseline} editingEntry={editingEntry}
         dishes={dishes} onClose={closeLogger} onSave={handleSave} />}
       {dishEditorOpen && <DishEditor dish={dishEditorDish} onSave={handleSaveDish} onClose={closeDishEditor} />}
@@ -361,7 +410,8 @@ function DemoApp({ onExit, showToast, toast }) {
           )}
           {mobileTab === 'profile' && (
             <MobileProfile user="demo@metabo.app" baseline={baseline} goal={goal}
-              onLogout={onExit} onUpdateBaseline={demoBlocked} onOpenHelp={() => showToast('🎬 Справка доступна в основном режиме', 'danger')} />
+              onLogout={onExit} onUpdateBaseline={demoBlocked} onChangePassword={demoBlocked}
+              onOpenHelp={() => showToast('🎬 Справка доступна в основном режиме', 'danger')} />
           )}
         </div>
         <MobileNav tab={mobileTab} onTab={setMobileTab} onAdd={openLoggerNew} />

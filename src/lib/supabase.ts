@@ -6,10 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 //  2) detectSessionInUrl включаем только если в URL реально есть редирект-параметры
 //     (#access_token / code= / error_code) — иначе на Vercel (rewrites без /api/rewrite-redirect)
 //     init вызывал exchangeCode → ошибку → TOKEN_REFRESHED/signedOut и мгновенный выброс на экран логина.
+// DECISION (админка): добавлен fragment= — по такой ссылке Supabase присылает письмо
+// «Восстановление пароля»; без этого detectSessionInUrl её игнорировал и страница recovery не открывалась.
 const hasAuthInUrl = typeof window !== 'undefined' &&
   (window.location.search.includes('code=') ||
+   window.location.search.includes('type=recovery') ||
    window.location.hash.includes('access_token') ||
-   window.location.hash.includes('error_code'));
+   window.location.hash.includes('error_code') ||
+   window.location.hash.includes('type=recovery'));
 
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
