@@ -250,10 +250,10 @@ export default function AdminPage({ user, onExit, showToast }) {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    onExit();
-  };
+  // DECISION: раньше «выход» в админке был полным signOut() — админ терял сессию и попадал
+  // на экран входа. Теперь это возврат в приложение (onExit → App.setView('app'));
+  // завершение сессии — только через профиль пользователя.
+  const handleExit = () => onExit();
 
   // ===== Производные данные дашборда =====
   const totalUsers = users.length;
@@ -331,7 +331,7 @@ export default function AdminPage({ user, onExit, showToast }) {
         <button className="adm-menu-btn" aria-label="Открыть меню" onClick={() => setMenuOpen(true)}>☰</button>
         <div className="adm-logo"><div className="dot">🔥</div> MetaBo Admin</div>
         <button className="adm-btn logout" style={{ width: 'auto', margin: '0 0 0 auto', padding: '8px 12px' }}
-          onClick={handleLogout}>🚪 Выйти</button>
+          onClick={handleExit}>← В приложение</button>
       </div>
       <div className={`adm-scrim${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(false)} />
 
@@ -352,7 +352,7 @@ export default function AdminPage({ user, onExit, showToast }) {
               <div style={{ fontSize: 11 }}>роль: admin</div>
             </div>
           </div>
-          <button className="adm-btn logout" onClick={handleLogout}>🚪 Выйти</button>
+          <button className="adm-btn logout" onClick={handleExit}>← В приложение</button>
           <div>MetaBo · Supabase live</div>
         </div>
       </aside>
