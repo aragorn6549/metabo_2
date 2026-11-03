@@ -1,5 +1,5 @@
 
-function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpenHelp, onChangePassword }) {
+function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpenHelp, onChangePassword, isAdmin, onOpenAdmin }) {
   return (
     <div>
       <div className="mobile-page-title">Профиль</div>
@@ -38,6 +38,10 @@ function MobileProfile({ user, baseline, goal, onLogout, onUpdateBaseline, onOpe
         </div>
       )}
       <div style={{ display:'flex', flexDirection:'column', gap: 12, marginTop: 16 }}>
+        {/* доп.: полноэкранная админка на мобильном — вход из профиля (роль admin) */}
+        {isAdmin && onOpenAdmin && (
+          <button className="btn secondary" onClick={onOpenAdmin}>🛡 Админка</button>
+        )}
         <button className="btn secondary" onClick={onOpenHelp}>📖 Справка по методам</button>
         <button className="btn secondary" onClick={onUpdateBaseline}>+ Новый замер InBody</button>
         {/* доп. ТЗ п.3: смена пароля залогиненным пользователем */}

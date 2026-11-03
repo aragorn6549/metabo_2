@@ -12,6 +12,7 @@ import HelpTab from '@/features/help/HelpTab';
 import HelpContent from '@/features/help/HelpContent';
 import MobileProfile from '@/features/profile/MobileProfile';
 import AdminPanel from '@/features/admin/AdminPanel';
+import AdminPage from '@/features/admin/AdminPage';
 import ChangePasswordModal from '@/features/account/ChangePasswordModal';
 import { fetchIsAdmin, invalidateAdminCache } from '@/lib/admin';
 import MobileNav from '@/components/MobileNav';
@@ -68,7 +69,8 @@ export default function App() {
   const [editingBaseline, setEditingBaseline] = useState(false);
   // ===== Админка / пароли (доп. ТЗ) =====
   const [isAdmin, setIsAdmin] = useState(false);        // роль из public.admin_roles
-  const [adminOpen, setAdminOpen] = useState(false);    // модалка списка пользователей
+  const [adminOpen, setAdminOpen] = useState(false);    // модалка списка пользователей (старая админка — fallback)
+  const [view, setView] = useState('app');              // 'app' | 'admin' — полноэкранная админка (AdminPage)
   const [changePwOpen, setChangePwOpen] = useState(false); // модалка смены своего пароля
   // ссылка восстановления из письма «Забыли пароль?» → #/auth?mode=recovery (implicit flow: токен в фрагменте)
   const [recoveryMode, setRecoveryMode] = useState(() =>
@@ -87,6 +89,7 @@ export default function App() {
     let alive = true;
     invalidateAdminCache();
     setIsAdmin(false);
+    if (!user?.id) setView('app'); // сессия истекла — выходим из полноэкранной админки
     // DECISION: передаём объект user — роль может быть задана через app_metadata/user_metadata
     // (работает без таблицы admin_roles, см. src/lib/admin.js)
     if (user?.id) fetchIsAdmin(user.id, user).then(v => { if (alive) setIsAdmin(v); });
@@ -144,7 +147,7 @@ export default function App() {
     await supabase.auth.signOut();
     // DECISION: явный SIGNED_OUT обрабатываем здесь (в subscribe он игнорируется как ложный из init-фазы)
     setUser(null);
-    setTab('map'); setMobileTab('map');
+    setTab('map'); setMobileTab('map'); setView('app');
     setAdminOpen(false); setChangePwOpen(false); setIsAdmin(false); setRecoveryMode(false);
   };
 
@@ -255,6 +258,17 @@ export default function App() {
   }
   if (store.loading) return <div className="app"><div className="empty-state">Загрузка…</div></div>;
 
+  // ===== Полноэкранная админка (по образцу admin-demo.html), доступна только роли admin =====
+  // Открытие не требует заполненного профиля/базовой линии — админ сразу видит дашборд.
+  if (view === 'admin' && isAdmin) {
+    return (
+      <>
+        <AdminPage user={user} onExit={() => setView('app')} showToast={showToast} />
+        {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
+      </>
+    );
+  }
+
   const hasAnyData = foodLogs.length > 0 || activities.length > 0;
   const goToGoal = () => { setTab('goal'); setMobileTab('goal'); };
   const userEmail = user.email || '';
@@ -300,7 +314,8 @@ export default function App() {
           {mobileTab === 'profile' && (
             <MobileProfile user={userEmail} baseline={baseline} goal={goal}
               onLogout={handleLogout} onUpdateBaseline={openInbodyEditorNew}
-              onOpenHelp={() => setHelpOpen(true)} onChangePassword={() => setChangePwOpen(true)} />
+              onOpenHelp={() => setHelpOpen(true)} onChangePassword={() => setChangePwOpen(true)}
+              isAdmin={isAdmin} onOpenAdmin={() => setView('admin')} />
           )}
         </div>
         <MobileNav tab={mobileTab} onTab={setMobileTab} onAdd={openLoggerNew} />
@@ -341,7 +356,7 @@ export default function App() {
             <button className={`tab ${tab === 'help' ? 'active' : ''}`} onClick={() => setTab('help')}>📖 Справка</button>
             {/* доп. ТЗ п.1: вкладка админки видна только пользователям с ролью admin */}
             {isAdmin && (
-              <button className="tab admin-tab" onClick={() => setAdminOpen(true)}>🛡 Админка</button>
+              <button className="tab admin-tab" onClick={() => setView('admin')}>🛡 Админка</button>
             )}
           </div>
           <button className="logout-btn" onClick={() => setChangePwOpen(true)} title="Сменить пароль">🔑 Пароль</button>
