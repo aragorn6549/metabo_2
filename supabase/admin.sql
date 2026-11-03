@@ -88,4 +88,36 @@ update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin')
 where email = 'admin@admin.ru';
 -- ВАЖНО: после изменения метаданных выйти и войти заново (роль зашита в JWT).
+-- 6. RPC: агрегаты для дашборда админки (AdminPage.jsx) — всего по БД, только для админа
+create or replace function public.admin_dashboard_stats()
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare result jsonb;
+begin
+  if not public.is_admin(auth.uid()) then
+    raise exception 'Forbidden: требуется роль администратора' using errcode = '42501';
+  end if;
+  select jsonb_build_object(
+    'entries_count', (select count(*) from public.entries),
+    'inbody_count',  (select count(*) from public.inbody_logs),
+    'dishes_count',  (select count(*) from public.dishes),
+    'profiles_count',(select count(*) from public.profiles),
+    'by_type', (
+      select coalesce(jsonb_object_agg(t.cnt_type, t.n), '{}'::jsonb)
+      from (
+        select case when e.type in ('food','workout','sleep') then e.type else 'other' end as cnt_type,
+               count(*) as n
+        from public.entries e group by 1
+      ) t
+    ),
+    'active_7d', (
+      select count(distinct e.user_id) from public.entries e
+      where e.occurred_at > now() - interval '7 days'
+    )
+  ) into result;
+  return result;
+end; $$;
+
+grant execute on function public.admin_dashboard_stats() to authenticated;
+
 -- ============================================================
