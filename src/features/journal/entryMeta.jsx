@@ -1,3 +1,5 @@
+import { formatSleepRange } from '@/lib/shared';
+
 const WORKOUT_NAMES = { strength:'Силовая', cardio:'Кардио', volleyball:'Волейбол',
   padel:'Падел', tennis:'Теннис', football:'Футбол', basketball:'Баскетбол' };
 const OTHER_NAMES = { walk:'Прогулка', work_sit:'Работа сидячая', work_stand:'Работа стоячая', chill:'Спокойствие' };
@@ -11,7 +13,10 @@ function entryLabel(e) {
 function entryMeta(e) {
   if (e.type==='food') return <><strong>{e.calories||0}</strong> ккал · Б <strong>{e.protein||0}</strong> · Ж <strong>{e.fat||0}</strong> · У <strong>{e.carbs||0}</strong></>;
   if (e.type==='workout') return <>{e.duration||0} мин · <strong>{e.calories||0}</strong> ккал</>;
-  if (e.type==='sleep') return <>{e.hours||0} ч {e.quality?`· качество ${e.quality}/5`:''}</>;
+  if (e.type==='sleep') {
+    const range = formatSleepRange(e, e.timestamp); // границы с датой при переходе суток
+    return <>{range ? `${range} · ` : ''}<strong>{e.hours||0}</strong> ч {e.quality?`· качество ${e.quality}/5`:''}</>;
+  }
   return <>{e.duration||0} мин</>;
 }
 function formatTime(ts) { return new Date(ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' }); }

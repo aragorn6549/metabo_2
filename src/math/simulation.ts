@@ -1,6 +1,28 @@
-// DECISION: формулы скопированы из прототипа без изменений (ТЗ §6)
+import { sleepWindow } from '@/lib/utils';
+
+// DECISION: формулы скопированы из прототипа без изменений (ТЗ §6),
+// КРОМЕ сна: раньше «сонный час» определялся жёсткой эвристикой 23:00–07:00 и интервалом
+// [timestamp, timestamp+hours], который ломался при переходе суток (уснул 15-го в 23:09,
+// проснулся 16-го в 08:23). Теперь, если у записи сна заданы фактические границы
+// (заснул/проснулся), сонные эффекты (липолиз ×1.45, MPS×0.15, MPB 0.13) считаются по ним,
+// включая ночь через полночь. Записи без границ используют прежнюю логику — обратная
+// совместимость сохранена.
+function isAsleepHour(sleepEntries, hour, dayStartTs) {
+  for (const s of sleepEntries) {
+    const w = sleepWindow(s);
+    if (!w) continue;
+    const startH = (w.start - dayStartTs) / 3600e3;
+    const endH = (w.end - dayStartTs) / 3600e3;
+    if (hour >= startH && hour <= endH) return true; // endH может быть > 24 — окно через полночь
+  }
+  return false;
+}
+
 function computeHourlyRate(hour, dayStartTs, foodLogs, activities, calorieBalance) {
-  const isSleepingHour = hour >= 23 || hour < 7;
+  const sleepEntries = activities.filter(a => a.type === 'sleep');
+  const hasWindows = sleepEntries.some(s => sleepWindow(s));
+  const heuristicSleep = hour >= 23 || hour < 7;
+  const isSleepingHour = hasWindows ? isAsleepHour(sleepEntries, hour, dayStartTs) : heuristicSleep;
   const baseFat = 0.22;
   let insulinSuppression = 1.0;
   let insulinSignal = 0;
@@ -19,10 +41,13 @@ function computeHourlyRate(hour, dayStartTs, foodLogs, activities, calorieBalanc
 
   const circadian = 0.6 + 0.55 * Math.cos((hour - 4) / 24 * 2 * Math.PI);
   let sleepBoost = isSleepingHour ? 1.4 : 1.0;
-  for (const s of activities.filter(a => a.type === 'sleep')) {
-    const startHour = (s.timestamp - dayStartTs) / 3600e3;
-    const endHour = startHour + (s.hours || 8);
-    if (hour >= startHour && hour <= endHour) sleepBoost = Math.max(sleepBoost, 1.45);
+  if (!hasWindows) {
+    // Старые записи без границ: прежний интервал [timestamp, timestamp+hours]
+    for (const s of sleepEntries) {
+      const startHour = (s.timestamp - dayStartTs) / 3600e3;
+      const endHour = startHour + (s.hours || 8);
+      if (hour >= startHour && hour <= endHour) sleepBoost = Math.max(sleepBoost, 1.45);
+    }
   }
   let exerciseBoost = 0;
   for (const w of activities.filter(a => a.type === 'workout')) {
@@ -81,11 +106,11 @@ function computeHourlyRate(hour, dayStartTs, foodLogs, activities, calorieBalanc
   return { lipolysis, esterification, netFatFlux, netMuscle, mps, mpb };
 }
 
-function simulateDay(foodLogs, activities, calorieBalance) {
-  const now = new Date();
+function simulateDay(foodLogs, activities, calorieBalance, opts) {
+  const now = (opts && opts.now != null) ? new Date(opts.now) : new Date();
   const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
   const dayStartTs = dayStart.getTime();
-  const currentHour = (now - dayStartTs) / 3600e3;
+  const currentHour = Math.max(0, Math.min(24, (now - dayStartTs) / 3600e3));
   const step = 0.25;
   let netFatToday = 0, fatOxidized = 0, fatStored = 0, muscleToday = 0;
   const snapshots = [];

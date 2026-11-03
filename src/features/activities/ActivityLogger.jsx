@@ -1,8 +1,53 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 
-import { MET_COEFFICIENTS, calcMETCalories } from '@/lib/shared';
+import { MET_COEFFICIENTS, calcMETCalories, toLocalIso, parseLocalIso, normalizeSleepWindow } from '@/lib/shared';
 import { WORKOUT_NAMES, OTHER_NAMES } from '@/features/journal/entryMeta';
 import NumberInput from '@/components/NumberInput';
+
+const DAY_MS = 86400e3;
+
+// ---------- Сон: форма с фактическими границами «заснул / проснулся» ----------
+// Значения храним как datetime-local-строки в ЛОКАЛЬНОМ времени ('YYYY-MM-DDTHH:MM').
+// Если wake <= fallAsleep — пробуждение на следующий день (переход суток), поэтому
+// длительность считается корректно даже для ночи «15.11 23:09 → 16.11 08:23»,
+// внесённой утром 16-го задним числом.
+const defaultSleepForm = () => {
+  const now = new Date();
+  let wakeTs, sleepTs;
+  if (now.getHours() >= 12) { wakeTs = now.getTime(); sleepTs = wakeTs - 8 * 3600e3; }
+  else {
+    const todayMidnight = new Date(now); todayMidnight.setHours(0, 0, 0, 0);
+    wakeTs = Math.min(now.getTime(), todayMidnight.getTime() + 8 * 3600e3);
+    sleepTs = wakeTs - 8 * 3600e3;
+  }
+  return {
+    hours: 8, quality: 4,
+    startStr: toLocalIso(sleepTs).slice(0, 16),
+    endStr: toLocalIso(wakeTs).slice(0, 16),
+    manualHours: false,
+  };
+};
+const sleepWindowFromForm = (s) => {
+  const w = normalizeSleepWindow(parseLocalIso(s.startStr), parseLocalIso(s.endStr));
+  return w && w.hours > 0 && w.hours <= 24 ? w : null;
+};
+const editSleepForm = (e) => {
+  const base = {
+    hours: e.hours ?? 8, quality: e.quality ?? 4,
+    startStr: '', endStr: '', manualHours: !(e.sleep_start && e.sleep_end),
+  };
+  if (e.sleep_start && e.sleep_end) {
+    base.startStr = String(e.sleep_start).slice(0, 16);
+    base.endStr = String(e.sleep_end).slice(0, 16);
+  } else {
+    // старые записи без границ: стартуем с предполагаемой полночи пробуждения
+    const ts = e.timestamp ?? Date.now();
+    const d = new Date(ts); d.setHours(0, 0, 0, 0);
+    base.startStr = toLocalIso(d.getTime() - (base.hours || 8) * 3600e3).slice(0, 16);
+    base.endStr = toLocalIso(d.getTime()).slice(0, 16);
+  }
+  return base;
+};
 
 function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
   const [tab, setTab] = useState(editingEntry ? editingEntry.type : 'food');
@@ -11,13 +56,13 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
     const base = {
       food: { name:'', calories:0, protein:0, fat:0, carbs:0 },
       workout: { subtype:'strength', duration:60, calories:400 },
-      sleep: { hours:8, quality:4 },
+      sleep: defaultSleepForm(),
       other: { subtype:'walk', duration:30 }
     };
     if (!editingEntry) return base;
     if (editingEntry.type==='food') base.food = { name:editingEntry.name||'', calories:editingEntry.calories ?? 0, protein:editingEntry.protein ?? 0, fat:editingEntry.fat ?? 0, carbs:editingEntry.carbs ?? 0 };
     else if (editingEntry.type==='workout') base.workout = { subtype:editingEntry.subtype||'strength', duration:editingEntry.duration ?? 60, calories:editingEntry.calories ?? 0 };
-    else if (editingEntry.type==='sleep') base.sleep = { hours:editingEntry.hours ?? 8, quality:editingEntry.quality ?? 4 };
+    else if (editingEntry.type==='sleep') base.sleep = editSleepForm(editingEntry);
     else if (editingEntry.type==='other') base.other = { subtype:editingEntry.subtype||'walk', duration:editingEntry.duration ?? 30 };
     return base;
   });
@@ -37,6 +82,32 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
   };
   const update = (s, f, v) => setForm(prev => ({ ...prev, [s]: { ...prev[s], [f]: v } }));
 
+  // Сон: любое изменение границ пересчитывает длительность (пока не включён ручной режим),
+  // а любое изменение длительности сдвигает время пробуждения от засыпания.
+  const updateSleep = (field, value) => {
+    setForm(prev => {
+      const s = { ...prev.sleep, [field]: value };
+      if (field === 'startStr' || field === 'endStr') {
+        const w = sleepWindowFromForm(s);
+        if (w && !s.manualHours) s.hours = w.hours;
+      } else if (field === 'hours') {
+        s.manualHours = true;
+        const startTs = parseLocalIso(s.startStr);
+        if (Number.isFinite(startTs)) {
+          const h = Math.max(0, Math.min(24, +value || 0));
+          s.endStr = toLocalIso(startTs + h * 3600e3).slice(0, 16);
+        }
+      }
+      return { ...prev, sleep: s };
+    });
+  };
+  const useAutoHours = () => setForm(prev => {
+    const s = { ...prev.sleep, manualHours: false };
+    const w = sleepWindowFromForm(s);
+    if (w) s.hours = w.hours;
+    return { ...prev, sleep: s };
+  });
+
   const selectDish = (d) => {
     setForm(prev => ({ ...prev, food: {
       name: d.name,
@@ -55,7 +126,27 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
 
   const NUMERIC_FIELDS = ['calories', 'protein', 'fat', 'carbs', 'duration', 'hours', 'quality'];
 
+  // Ошибка валидации формы сна (показывается под полями границ)
+  const [sleepError, setSleepError] = useState(null);
+
   const handleSubmit = () => {
+    if (tab === 'sleep') {
+      const s = form.sleep;
+      const w = sleepWindowFromForm(s);
+      if (!w) { setSleepError('Укажи корректные дата/время засыпания и пробуждения'); return; }
+      setSleepError(null);
+      const hours = Math.max(0, Math.min(24, +s.hours || 0));
+      onSave({
+        type: 'sleep', name: 'Сон',
+        hours, quality: +s.quality || 0,
+        sleep_start: s.startStr, sleep_end: s.endStr,
+        // Днём сна считается день пробуждения; timestamp = момент пробуждения.
+        timestamp: w.end,
+        // При редактировании сохраняем id — запись обновится (upsert), а не добавится новая.
+        ...(editingEntry?.id ? { id: editingEntry.id } : {}),
+      });
+      return;
+    }
     const raw = form[tab];
     const normalized = { ...raw };
     // BUGFIX: раньше сюда попадали и строковые поля (name). parseFloat('Куриная грудка') → NaN → 0,
@@ -162,14 +253,44 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
                 <NumberInput value={form.workout.calories} onChange={v=>update('workout','calories',v)} /></div>
             </div>
           )}
-          {tab==='sleep' && (
-            <div className="form-grid">
-              <div className="field full"><label>Длительность (часы)</label>
-                <NumberInput value={form.sleep.hours} onChange={v=>update('sleep','hours',v)} /></div>
-              <div className="field full"><label>Качество (1-5)</label>
-                <NumberInput value={form.sleep.quality} onChange={v=>update('sleep','quality',v)} /></div>
+          {tab==='sleep' && (() => {
+            const w = sleepWindowFromForm(form.sleep);
+            return (
+            <div>
+              <div className="form-grid">
+                <div className="field full"><label>Заснул (дата и время)</label>
+                  <input type="datetime-local" value={form.sleep.startStr}
+                    onChange={e=>updateSleep('startStr', e.target.value)} /></div>
+                <div className="field full"><label>Проснулся (дата и время)</label>
+                  <input type="datetime-local" value={form.sleep.endStr}
+                    onChange={e=>updateSleep('endStr', e.target.value)} /></div>
+                <div className="field full"><label>Длительность (часы) {w && !form.sleep.manualHours ? '· по границам сна' : ''}</label>
+                  <NumberInput value={form.sleep.hours} onChange={v=>updateSleep('hours',v)} /></div>
+                <div className="field full"><label>Качество (1-5)</label>
+                  <NumberInput value={form.sleep.quality} onChange={v=>update('sleep','quality',v)} /></div>
+              </div>
+              {w ? (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                  😴 {w.hours.toFixed(2).replace(/\.?0+$/,'')} ч сна
+                  {' · '}уснул {new Date(w.start).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+                  {' → '}встал {new Date(w.end).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+                  {w.end - w.start > DAY_MS - 3600e3 ? ' · ⚠ окно больше суток — проверь даты' : ''}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                  Заполни оба поля — длительность посчитается автоматически, даже если сон перешёл на следующий день.
+                </div>
+              )}
+              {form.sleep.manualHours && w && Math.abs((+form.sleep.hours||0) - w.hours) > 0.05 && (
+                <button className="btn secondary" onClick={useAutoHours}
+                  style={{ marginTop: 8, padding: '8px 14px', width: 'auto', fontSize: 13 }}>
+                  ⟳ Взять длительность из границ ({w.hours} ч)
+                </button>
+              )}
+              {sleepError && <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>⚠ {sleepError}</div>}
             </div>
-          )}
+            );
+          })()}
           {tab==='other' && (
             <div className="form-grid">
               <div className="field full"><label>Тип</label>
