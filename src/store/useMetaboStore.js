@@ -7,7 +7,7 @@
 import { useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import { useStore } from 'zustand';
-import { calculateBMR, calculateTDEE, calcBMI, simulateDay, computePlan, genId, sleepAttributionDayTs } from '@/lib/shared';
+import { calculateBMR, calculateTDEE, calcBMI, simulateDay, computePlan, genId, sleepAttributionDayTs, sleepWindow } from '@/lib/shared';
 import { supabase } from '@/lib/supabase';
 
 const dayMs = 86400e3;
@@ -29,10 +29,10 @@ const mapEntryRow = (r) => ({
   duration: toNum(r.duration_min, undefined),
   hours: toNum(r.sleep_hours, undefined),
   quality: toNum(r.sleep_quality, undefined),
-  // Границы сна «заснул/проснулся» — локальные ISO-строки ('YYYY-MM-DDTHH:MM'),
-  // корректно обрабатывают переход суток (23:09 → 08:23 следующего дня).
-  sleep_start: r.sleep_start || undefined,
-  sleep_end: r.sleep_end || undefined,
+  // DECISION: границы сна («заснул/проснулся») НЕ хранятся отдельными колонками —
+  // момент пробуждения = timestamp (occurred_at), засыпание выводится из длительности
+  // (см. sleepWindow в lib/utils). Раньше upsert падал с 400 PGRST204 из-за несуществующих
+  // колонок sleep_start/sleep_end.
 });
 
 const entryPayload = (e) => ({
@@ -47,8 +47,8 @@ const entryPayload = (e) => ({
   duration_min: toNum(e.duration ?? e.duration_min),
   sleep_hours: toNum(e.hours ?? e.sleep_hours),
   sleep_quality: toNum(e.quality ?? e.sleep_quality),
-  sleep_start: e.sleep_start ?? null,
-  sleep_end: e.sleep_end ?? null,
+  // ВАЖНО: никаких sleep_start/sleep_end — таких колонок в entries нет, и PostgREST
+  // отклоняет весь upsert с 400 (PGRST204). Длительность/качество + occurred_at достаточны.
 });
 
 const mapInbodyRow = (r) => ({
@@ -350,8 +350,9 @@ export function useMetaboStore(user) {
       todayData = {
         tdee, caloriesConsumed, balance, macros,
         sleepHours: sleepEntry?.hours ?? 8,
-        sleepStart: sleepEntry?.sleep_start ?? null,
-        sleepEnd: sleepEntry?.sleep_end ?? null,
+        // Границы выводятся из записи (пробуждение = timestamp, засыпание = −длительность)
+        sleepStart: sleepWindow(sleepEntry)?.start ?? null,
+        sleepEnd: sleepWindow(sleepEntry)?.end ?? null,
         hasStrength: todayActs.some(a => a.type === 'workout' && a.subtype === 'strength'),
       };
       sim = simulateDay(todayFoods, todayActs, balance);

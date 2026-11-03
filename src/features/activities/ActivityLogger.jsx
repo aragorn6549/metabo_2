@@ -32,21 +32,15 @@ const sleepWindowFromForm = (s) => {
   return w && w.hours > 0 && w.hours <= 24 ? w : null;
 };
 const editSleepForm = (e) => {
-  const base = {
-    hours: e.hours ?? 8, quality: e.quality ?? 4,
-    startStr: '', endStr: '', manualHours: !(e.sleep_start && e.sleep_end),
+  // Границы выводим из записи: timestamp = пробуждение, hours = длительность.
+  const ts = e.timestamp ?? Date.now();
+  const hours = e.hours ?? 8;
+  return {
+    hours, quality: e.quality ?? 4,
+    startStr: toLocalIso(ts - hours * 3600e3).slice(0, 16),
+    endStr: toLocalIso(ts).slice(0, 16),
+    manualHours: false,
   };
-  if (e.sleep_start && e.sleep_end) {
-    base.startStr = String(e.sleep_start).slice(0, 16);
-    base.endStr = String(e.sleep_end).slice(0, 16);
-  } else {
-    // старые записи без границ: стартуем с предполагаемой полночи пробуждения
-    const ts = e.timestamp ?? Date.now();
-    const d = new Date(ts); d.setHours(0, 0, 0, 0);
-    base.startStr = toLocalIso(d.getTime() - (base.hours || 8) * 3600e3).slice(0, 16);
-    base.endStr = toLocalIso(d.getTime()).slice(0, 16);
-  }
-  return base;
 };
 
 function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
@@ -109,7 +103,10 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
   });
 
   const selectDish = (d) => {
+    // DECISION: помечаем dish_id — это блюдо из рациона; при сохранении в каталог
+    // ничего не записываем (редактирование блюд — только во вкладке «Рацион»).
     setForm(prev => ({ ...prev, food: {
+      dish_id: d.id,
       name: d.name,
       calories: d.calories,
       protein: d.protein,
@@ -120,7 +117,8 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
   };
 
   const startNewDish = () => {
-    setForm(prev => ({ ...prev, food: { name:'', calories:0, protein:0, fat:0, carbs:0 } }));
+    // Временная еда «для себя»: НЕ попадёт в каталог рациона при сохранении.
+    setForm(prev => ({ ...prev, food: { dish_id: null, name:'', calories:0, protein:0, fat:0, carbs:0 } }));
     setFoodStep('edit');
   };
 
@@ -139,7 +137,9 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
       onSave({
         type: 'sleep', name: 'Сон',
         hours, quality: +s.quality || 0,
-        sleep_start: s.startStr, sleep_end: s.endStr,
+        // DECISION: в БД идут только длительность/качество; границы сна НЕ сохраняются
+        // отдельными колонками (их нет в entries → был 400 PGRST204). Момент ПРОБУЖДЕНИЯ
+        // = timestamp записи, засыпание выводится из длительности (см. sleepWindow).
         // Днём сна считается день пробуждения; timestamp = момент пробуждения.
         timestamp: w.end,
         // При редактировании сохраняем id — запись обновится (upsert), а не добавится новая.
