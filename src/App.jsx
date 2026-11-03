@@ -14,7 +14,7 @@ import MobileProfile from '@/features/profile/MobileProfile';
 import AdminPanel from '@/features/admin/AdminPanel';
 import AdminPage from '@/features/admin/AdminPage';
 import ChangePasswordModal from '@/features/account/ChangePasswordModal';
-import { fetchIsAdmin, invalidateAdminCache } from '@/lib/admin';
+import { fetchIsAdmin, invalidateAdminCache, isAdminFromMetadata } from '@/lib/admin';
 import MobileNav from '@/components/MobileNav';
 import ActivityLogger from '@/features/activities/ActivityLogger';
 import InBodyEditor from '@/features/inbody/InBodyEditor';
@@ -92,7 +92,21 @@ export default function App() {
     if (!user?.id) setView('app'); // сессия истекла — выходим из полноэкранной админки
     // DECISION: передаём объект user — роль может быть задана через app_metadata/user_metadata
     // (работает без таблицы admin_roles, см. src/lib/admin.js)
-    if (user?.id) fetchIsAdmin(user.id, user).then(v => { if (alive) setIsAdmin(v); });
+    // Автовход в админку: если роль уже известна из метаданных токена (синхронно) — открываем
+    // полноэкранный AdminPage сразу, не дожидаясь RPC-проверки (исправление «админ залогинился —
+    // видит обычный пользовательский экран»).
+    if (user?.id && isAdminFromMetadata(user)) {
+      setIsAdmin(true);
+      setView('admin');
+      return () => { alive = false; };
+    }
+    if (user?.id) fetchIsAdmin(user.id, user).then(v => {
+      if (!alive) return;
+      setIsAdmin(v);
+      // Админ сразу попадает на страничку админки (по образцу admin-demo.html),
+      // а не на обычный пользовательский дашборд.
+      if (v) setView('admin');
+    });
     return () => { alive = false; };
   }, [user?.id]);
 
@@ -115,7 +129,11 @@ export default function App() {
         setUser(data.user);
         invalidateAdminCache();
         const v = await fetchIsAdmin(data.user.id, data.user);
-        if (alive) setIsAdmin(v);
+        if (alive) {
+          setIsAdmin(v);
+          // страховка: роль подтвердилась только сейчас (старый токен без метаданных) — входим в админку
+          if (v) setView('admin');
+        }
       }
     });
     if (!isAdmin) {
@@ -126,7 +144,7 @@ export default function App() {
         setUser(data.user);
         invalidateAdminCache();
         const v = await fetchIsAdmin(data.user.id, data.user);
-        if (alive && v) setIsAdmin(true);
+        if (alive && v) { setIsAdmin(true); setView('admin'); }
       }, 1500);
     }
     return () => { alive = false; sub.subscription.unsubscribe(); if (retry) clearTimeout(retry); };
