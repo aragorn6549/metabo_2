@@ -26,6 +26,31 @@ export async function fetchIsAdmin(userId, user = null) {
     return true;
   }
   if (adminCheckCache.uid === userId) return adminCheckCache.isAdmin;
+
+  // Основной канал — RPC is_admin(): она проверяет и таблицу admin_roles, и метаданные,
+  // и создаётся тем же supabase/admin.sql. Если миграция не выполнялась, RPC нет —
+  // это распознаётся по коду PGRST202, и запрос к admin_roles НЕ выполняется,
+  // чтобы в консоли не было ложных 404 («Failed to load resource»).
+  let rpcData = null, rpcError = null;
+  try {
+    ({ data: rpcData, error: rpcError } = await supabase.rpc('is_admin', { uid: userId }));
+  } catch (err) {
+    console.warn('fetchIsAdmin:', err);
+  }
+  if (!rpcError) {
+    const isAdminByRpc = !!rpcData || isAdminFromMetadata(user);
+    adminCheckCache = { uid: userId, isAdmin: isAdminByRpc };
+    return isAdminByRpc;
+  }
+  if (rpcError.code !== 'PGRST202') {
+    // Реальная ошибка сервера (не «функции нет») — логируем и считаем «не админ»
+    console.warn('is_admin rpc:', rpcError);
+    adminCheckCache = { uid: userId, isAdmin: false };
+    return false;
+  }
+
+  // Фолбэк только если RPC отсутствует, но таблица admin_roles может существовать
+  // (например, admin.sql выполнен частично). Ошибку 404/«таблицы нет» трактуем штатно.
   let data, error;
   try {
     ({ data, error } = await supabase
@@ -40,10 +65,6 @@ export async function fetchIsAdmin(userId, user = null) {
     adminCheckCache = { uid: userId, isAdmin: false };
     return false;
   }
-  // Исправление «Uncaught (in promise)»: если миграция supabase/admin.sql не выполнялась,
-  // таблицы admin_roles нет и PostgREST отвечает 404 (PGRST205). Это штатная ситуация
-  // (роль тогда определяется только метаданными — быстрый путь выше), поэтому 404 —
-  // просто «не админ», без console.error и без пробрасывания ошибки наружу.
   if (error && error.code !== 'PGRST205' && error.code !== '42P01') {
     // RLS может молча вернуть пустую строку вместо ошибки — это просто «не админ»
     console.warn('admin_roles check:', error);
