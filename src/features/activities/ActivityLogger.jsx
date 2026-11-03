@@ -53,17 +53,26 @@ function ActivityLogger({ onClose, onSave, baseline, editingEntry, dishes }) {
     setFoodStep('edit');
   };
 
+  const NUMERIC_FIELDS = ['calories', 'protein', 'fat', 'carbs', 'duration', 'hours', 'quality'];
+
   const handleSubmit = () => {
     const raw = form[tab];
     const normalized = { ...raw };
+    // BUGFIX: раньше сюда попадали и строковые поля (name). parseFloat('Куриная грудка') → NaN → 0,
+    // из-за чего название приёма пищи терялось и в журнал/на главной странице писалось «0».
+    // Теперь числовая нормализация применяется только к числовым полям, текст остаётся текстом.
     Object.keys(normalized).forEach(k => {
-      if (typeof normalized[k] === 'string' && normalized[k] !== '') {
-        const n = parseFloat(normalized[k].replace(',', '.'));
+      if (!NUMERIC_FIELDS.includes(k)) return;
+      const v = normalized[k];
+      if (typeof v === 'number') return;
+      if (typeof v === 'string' && v !== '') {
+        const n = parseFloat(v.replace(',', '.'));
         normalized[k] = Number.isNaN(n) ? 0 : n;
-      } else if (normalized[k] === '') {
+      } else if (v === '' || v == null) {
         normalized[k] = 0;
       }
     });
+    if (typeof normalized.name === 'string') normalized.name = normalized.name.trim();
     onSave({ ...normalized, type: tab, timestamp: editingEntry ? editingEntry.timestamp : Date.now() });
   };
 
