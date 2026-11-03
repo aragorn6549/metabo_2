@@ -68,7 +68,9 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [editingBaseline, setEditingBaseline] = useState(false);
   // ===== Админка / пароли (доп. ТЗ) =====
-  const [isAdmin, setIsAdmin] = useState(false);        // роль из public.admin_roles
+  // 'pending' — роль ещё не определена (обычный экран НЕ показываем); 'user' | 'admin'.
+  const [roleState, setRoleState] = useState('pending');
+  const isAdmin = roleState === 'admin';                // роль из public.admin_roles / метаданных
   const [adminOpen, setAdminOpen] = useState(false);    // модалка списка пользователей (старая админка — fallback)
   const [view, setView] = useState('app');              // 'app' | 'admin' — полноэкранная админка (AdminPage)
   const [changePwOpen, setChangePwOpen] = useState(false); // модалка смены своего пароля
@@ -85,26 +87,33 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // ===== ЖЁСТКОЕ УСЛОВИЕ: админ сразу после логина попадает на страницу админки =====
+  // Полноэкранная админка по образцу admin-demo.html — это компонент
+  // src/features/admin/AdminPage.jsx (единственный экран роли admin, см. рендер ниже).
+  // Раньше проверка роли была асинхронной (RPC is_admin / таблица admin_roles): пока она
+  // не завершилась, успевал отрисоваться обычный пользовательский экран (онбординг/дашборд) —
+  // визуально «админ зашёл и видит то же, что обычный пользователь». Теперь состояние роли
+  // для текущего пользователя хранится явно ('pending' | 'user' | 'admin'), и рендер
+  // блокируется до её определения: как только роль = admin — первым рисуется именно AdminPage.
   useEffect(() => {
     let alive = true;
     invalidateAdminCache();
-    setIsAdmin(false);
-    if (!user?.id) setView('app'); // сессия истекла — выходим из полноэкранной админки
-    // DECISION: передаём объект user — роль может быть задана через app_metadata/user_metadata
-    // (работает без таблицы admin_roles, см. src/lib/admin.js)
-    // Автовход в админку: если роль уже известна из метаданных токена (синхронно) — открываем
-    // полноэкранный AdminPage сразу, не дожидаясь RPC-проверки (исправление «админ залогинился —
-    // видит обычный пользовательский экран»).
-    if (user?.id && isAdminFromMetadata(user)) {
-      setIsAdmin(true);
+    if (!user?.id) {          // сессии нет / истекла — выходим из админки на экран входа
+      setRoleState('pending');
+      setView('app');
+      return () => { alive = false; };
+    }
+    // Синхронный быстрый путь: роль зашита в метаданные токена — открываем админку мгновенно.
+    if (isAdminFromMetadata(user)) {
+      setRoleState('admin');
       setView('admin');
       return () => { alive = false; };
     }
-    if (user?.id) fetchIsAdmin(user.id, user).then(v => {
+    // Асинхронный путь: RPC is_admin() / таблица admin_roles (см. src/lib/admin.js).
+    setRoleState('pending');
+    fetchIsAdmin(user.id, user).then(v => {
       if (!alive) return;
-      setIsAdmin(v);
-      // Админ сразу попадает на страничку админки (по образцу admin-demo.html),
-      // а не на обычный пользовательский дашборд.
+      setRoleState(v ? 'admin' : 'user');
       if (v) setView('admin');
     });
     return () => { alive = false; };
@@ -130,7 +139,7 @@ export default function App() {
         invalidateAdminCache();
         const v = await fetchIsAdmin(data.user.id, data.user);
         if (alive) {
-          setIsAdmin(v);
+          setRoleState(v ? 'admin' : 'user');
           // страховка: роль подтвердилась только сейчас (старый токен без метаданных) — входим в админку
           if (v) setView('admin');
         }
@@ -144,7 +153,7 @@ export default function App() {
         setUser(data.user);
         invalidateAdminCache();
         const v = await fetchIsAdmin(data.user.id, data.user);
-        if (alive && v) { setIsAdmin(true); setView('admin'); }
+        if (alive && v) { setRoleState('admin'); setView('admin'); }
       }, 1500);
     }
     return () => { alive = false; sub.subscription.unsubscribe(); if (retry) clearTimeout(retry); };
@@ -166,7 +175,7 @@ export default function App() {
     // DECISION: явный SIGNED_OUT обрабатываем здесь (в subscribe он игнорируется как ложный из init-фазы)
     setUser(null);
     setTab('map'); setMobileTab('map'); setView('app');
-    setAdminOpen(false); setChangePwOpen(false); setIsAdmin(false); setRecoveryMode(false);
+    setAdminOpen(false); setChangePwOpen(false); setRoleState('pending'); setRecoveryMode(false);
   };
 
   const { baseline, foodLogs, activities, dishes, goal, history, inbodyLogs, todayData, sim, plan } = store;
@@ -269,16 +278,19 @@ export default function App() {
       />
     );
   }
-  if (!baseline || editingBaseline) {
-    return <OnboardingScreen key={editingBaseline ? 'edit' : 'new'} initial={baseline}
-      onComplete={handleOnboardingComplete}
-      onCancel={baseline ? () => setEditingBaseline(false) : null} />;
+  // ===== ЖЁСТКОЕ УСЛОВИЕ: админ сразу после логина видит ТОЛЬКО страничку админки =====
+  // Полноэкранная админка по образцу admin-demo.html — компонент src/features/admin/AdminPage.jsx.
+  // Проверка роли асинхронна (RPC is_admin / таблица admin_roles / метаданные токена), поэтому
+  // пока роль не определена — показываем загрузку и НЕ пускаем ни на онбординг, ни на
+  // пользовательский дашборд (именно из-за этой гонки раньше «у админа загружалась страница
+  // такая же, как у обычного пользователя»). Как только роль = admin — первым рисуется AdminPage.
+  if (roleState === 'pending') {
+    return <div className="app"><div className="empty-state">Загрузка…</div></div>;
   }
-  if (store.loading) return <div className="app"><div className="empty-state">Загрузка…</div></div>;
 
-  // ===== Полноэкранная админка (по образцу admin-demo.html), доступна только роли admin =====
-  // Открытие не требует заполненного профиля/базовой линии — админ сразу видит дашборд.
-  if (view === 'admin' && isAdmin) {
+  // Полноэкранная админка (по образцу admin-demo.html) — единственный экран для роли admin:
+  // и при автоматическом входе сразу после логина, и при возврате из неё (view='admin').
+  if (isAdmin) {
     return (
       <>
         <AdminPage user={user} onExit={() => setView('app')} showToast={showToast} />
@@ -286,6 +298,13 @@ export default function App() {
       </>
     );
   }
+
+  if (!baseline || editingBaseline) {
+    return <OnboardingScreen key={editingBaseline ? 'edit' : 'new'} initial={baseline}
+      onComplete={handleOnboardingComplete}
+      onCancel={baseline ? () => setEditingBaseline(false) : null} />;
+  }
+  if (store.loading) return <div className="app"><div className="empty-state">Загрузка…</div></div>;
 
   const hasAnyData = foodLogs.length > 0 || activities.length > 0;
   const goToGoal = () => { setTab('goal'); setMobileTab('goal'); };
