@@ -155,7 +155,16 @@ export default function App() {
   const closeLogger = () => { setLoggerOpen(false); setEditingEntry(null); };
 
   const handleSave = async (entry) => {
-    await store.saveEntry(entry);
+    // DECISION: обёрнуто в try/catch — при ошибке БД (например, 400 PGRST204 из-за отсутствующей
+    // колонки) раньше вылетал «Uncaught (in promise)»: модалка не закрывалась, пользователь
+    // не получал обратной связи и нажимал «Сохранить» повторно. Теперь — понятный toast.
+    try {
+      await store.saveEntry(entry);
+    } catch (err) {
+      console.error('saveEntry:', err);
+      showToast('⚠ Не удалось сохранить: ' + (err?.message || 'ошибка БД'), 'danger');
+      return;
+    }
     if (editingEntry) showToast('✓ Изменения сохранены');
     else if (entry.type === 'food') showToast(`✓ ${entry.name || 'Приём пищи'} · ${entry.calories || 0} ккал`);
     else showToast(`✓ ${entry.type === 'workout' ? 'Тренировка' : entry.type === 'sleep' ? 'Сон' : 'Активность'}`);
