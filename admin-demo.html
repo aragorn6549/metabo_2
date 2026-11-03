@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetaBo · Админка (демо)</title>
+<style>
+  :root{
+    --bg:#080b14; --bg-2:#0f1420; --bg-3:#161c2b; --border:#1f2638;
+    --text:#e2e8f0; --muted:#6b7280; --accent:#8b5cf6; --indigo:#6366f1;
+    --danger:#ef4444; --ok:#22c55e; --warn:#eab308; --info:#38bdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+
+  /* ---------- Layout ---------- */
+  .app{display:flex;min-height:100vh}
+  .sidebar{width:230px;background:var(--bg-2);border-right:1px solid var(--border);padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;font-weight:900;font-size:18px}
+  .logo .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--indigo));display:grid;place-items:center;font-size:15px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;color:var(--muted);cursor:pointer;font-size:14px;font-weight:600;border:none;background:none;width:100%;text-align:left;transition:.15s;font-family:inherit}
+  .nav-item:hover{background:var(--bg-3);color:var(--text)}
+  .nav-item.active{background:var(--bg-3);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+  .nav-item .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11px;font-weight:800;border-radius:99px;padding:1px 7px}
+  .side-footer{margin-top:auto;padding:12px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+  .admin-chip{display:flex;align-items:center;gap:8px;background:var(--bg-3);border:1px solid var(--border);border-radius:12px;padding:8px 10px;margin-bottom:10px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--indigo));display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0}
+
+  .main{flex:1;padding:26px 32px;max-width:1240px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:14px;flex-wrap:wrap}
+  h1{font-size:22px;font-weight:900}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px}
+
+  /* ---------- Components ---------- */
+  .btn{background:linear-gradient(135deg,var(--accent),var(--indigo));color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;transition:.15s;font-family:inherit}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(99,102,241,.3)}
+  .btn.secondary{background:var(--bg-3);color:var(--text);border:1px solid var(--border)}
+  .btn.danger{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.35)}
+  .btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+  .card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:18px 20px}
+  .grid{display:grid;gap:14px}
+  .grid-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .grid-2{grid-template-columns:2fr 1fr}
+  .stat-label{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .stat-value{font-size:28px;font-weight:900;margin-top:6px}
+  .stat-delta{font-size:12px;font-weight:700;margin-top:4px}
+  .up{color:var(--ok)} .down{color:var(--danger)}
+
+  input[type=text],input[type=search],select{background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;font-family:inherit;outline:none;transition:.15s}
+  input:focus,select:focus{border-color:var(--accent)}
+  .search{flex:1;min-width:220px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;border-bottom:1px solid var(--border)}
+  tbody td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr:hover{background:rgba(139,92,246,.05)}
+  .table-wrap{overflow-x:auto}
+  .u-cell{display:flex;align-items:center;gap:10px}
+  .u-name{font-weight:700}
+  .u-email{color:var(--muted);font-size:12px}
+
+  .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:3px 9px}
+  .tag.admin{background:rgba(139,92,246,.18);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)}
+  .tag.user{background:var(--bg-3);color:var(--muted);border:1px solid var(--border)}
+  .tag.demo{background:rgba(234,179,8,.14);color:var(--warn);border:1px solid rgba(234,179,8,.35)}
+  .tag.active-t{background:rgba(34,197,94,.12);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+  .tag.dormant{background:rgba(107,114,128,.15);color:var(--muted);border:1px solid rgba(107,114,128,.35)}
+
+  .row-actions{display:flex;gap:6px;justify-content:flex-end}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;background:var(--bg-2);padding:4px;border-radius:12px;border:1px solid var(--border);width:max-content;margin-bottom:20px}
+  .tab{border:none;background:none;color:var(--muted);font-size:13px;font-weight:700;padding:8px 16px;border-radius:9px;cursor:pointer;font-family:inherit;transition:.15s}
+  .tab.active{background:var(--bg-3);color:var(--text)}
+  .page{display:none}.page.active{display:block}
+
+  /* charts (pure css) */
+  .bars{display:flex;align-items:flex-end;gap:8px;height:150px;padding-top:10px}
+  .bar{flex:1;background:linear-gradient(180deg,var(--accent),var(--indigo));border-radius:6px 6px 2px 2px;min-height:6px;position:relative;transition:.2s;opacity:.85}
+  .bar:hover{opacity:1}
+  .bar span{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+  .chart-card h3,.list-card h3{font-size:14px;font-weight:800;margin-bottom:14px}
+  .donut{width:130px;height:130px;border-radius:50%;background:conic-gradient(var(--accent) 0 46%,var(--indigo) 46% 74%,var(--warn) 74% 90%,var(--border) 90% 100%);display:grid;place-items:center;margin:0 auto}
+  .donut::after{content:"";width:80px;height:80px;border-radius:50%;background:var(--bg-2);position:absolute}
+  .legend{display:flex;flex-direction:column;gap:8px;margin-top:16px;font-size:12.5px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:8px}
+
+  /* activity feed */
+  .feed-item{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .feed-item:last-child{border-bottom:none}
+  .feed-icon{width:30px;height:30px;border-radius:9px;background:var(--bg-3);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .feed-time{color:var(--muted);font-size:11.5px;margin-top:2px}
+
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50}
+  .backdrop.open{display:flex}
+  .modal{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;max-width:460px;width:92%;padding:24px}
+  .modal h3{font-size:17px;font-weight:900;margin-bottom:8px}
+  .modal p{color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:18px}
+  .modal .warn-box{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px 14px;font-size:13px;color:#fca5a5;margin-bottom:18px}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
+  /* toast */
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg-3);border:1px solid var(--accent);color:var(--text);padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:.3s;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.danger{border-color:var(--danger)}
+
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+  .count-note{color:var(--muted);font-size:12.5px;margin-left:auto}
+  .empty-state{text-align:center;color:var(--muted);padding:40px;font-size:14px}
+
+  @media(max-width:900px){
+    .sidebar{display:none}
+    .main{padding:18px}
+    .grid-2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="logo"><div class="dot">🔥</div> MetaBo Admin</div>
+    <button class="nav-item active" data-page="dashboard" onclick="go(this)">📊 Дашборд</button>
+    <button class="nav-item" data-page="users" onclick="go(this)">👥 Пользователи <span class="badge" id="navCount">128</span></button>
+    <button class="nav-item" data-page="dishes" onclick="go(this)">🍽 Справочник блюд</button>
+    <button class="nav-item" data-page="settings" onclick="go(this)">⚙️ Настройки</button>
+    <div class="side-footer">
+      <div class="admin-chip">
+        <div class="avatar">АА</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">admin@admin.ru</div>
+          <div style="font-size:11px">роль: admin</div>
+        </div>
+      </div>
+      MetaBo · демо-стенд v0.1
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+
+    <!-- ================= DASHBOARD ================= -->
+    <section class="page active" id="page-dashboard">
+      <div class="topbar">
+        <div><h1>📊 Дашборд</h1><div class="sub">Обзор активности проекта MetaBo · обновлено 2 минуты назад</div></div>
+        <button class="btn secondary" onclick="toast('⟳ Данные обновлены')">⟳ Обновить</button>
+      </div>
+
+      <div class="grid grid-4" style="margin-bottom:20px">
+        <div class="card"><div class="stat-label">Пользователей</div><div class="stat-value">128</div><div class="stat-delta up">▲ +7 за неделю</div></div>
+        <div class="card"><div class="stat-label">Активных (7 дней)</div><div class="stat-value">54</div><div class="stat-delta up">▲ +12%</div></div>
+        <div class="card"><div class="stat-label">Записей журнала</div><div class="stat-value">9 412</div><div class="stat-delta up">▲ +318 сегодня</div></div>
+        <div class="card"><div class="stat-label">Удалено (30 дней)</div><div class="stat-value" style="color:var(--danger)">3</div><div class="stat-delta down">▼ по запросу админа</div></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card chart-card">
+          <h3>Новые пользователи · 14 дней</h3>
+          <div class="bars">
+            <div class="bar" style="height:30%"><span>21</span></div><div class="bar" style="height:45%"><span>22</span></div>
+            <div class="bar" style="height:25%"><span>23</span></div><div class="bar" style="height:60%"><span>24</span></div>
+            <div class="bar" style="height:50%"><span>25</span></div><div class="bar" style="height:70%"><span>26</span></div>
+            <div class="bar" style="height:35%"><span>27</span></div><div class="bar" style="height:55%"><span>28</span></div>
+            <div class="bar" style="height:80%"><span>29</span></div><div class="bar" style="height:65%"><span>30</span></div>
+            <div class="bar" style="height:40%"><span>31</span></div><div class="bar" style="height:90%"><span>1</span></div>
+            <div class="bar" style="height:75%"><span>2</span></div><div class="bar" style="height:100%"><span>3</span></div>
+          </div>
+          <div style="height:26px"></div>
+        </div>
+
+        <div class="card list-card">
+          <h3>Последние действия админа</h3>
+          <div class="feed-item"><div class="feed-icon">🗑</div><div><b>Удалён пользователь</b> ivan@mail.ru (вместе с историей)<div class="feed-time">сегодня, 14:32</div></div></div>
+          <div class="feed-item"><div class="feed-icon">📩</div><div><b>Сброс пароля</b> отправлен на petrov@gmail.com<div class="feed-time">сегодня, 11:05</div></div></div>
+          <div class="feed-item"><div class="feed-icon">➕</div><div><b>Блюдо добавлено</b> в справочник: «Творог 5% 200 г»<div class="feed-time">вчера, 19:44</div></div></div>
+          <div class="feed-item"><div class="feed-icon">🛡</div><div><b>Выдана роль admin</b> для manager@metabo.ru<div class="feed-time">вчера, 10:12</div></div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:14px">Типы записей журнала (за всё время)</h3>
+        <div style="display:flex;gap:40px;align-items:center;flex-wrap:wrap">
+          <div class="donut"></div>
+          <div class="legend">
+            <div><i style="background:var(--accent)"></i>Еда — 46%</div>
+            <div><i style="background:var(--indigo)"></i>Тренировки — 28%</div>
+            <div><i style="background:var(--warn)"></i>Сон — 16%</div>
+            <div><i style="background:var(--border)"></i>Прочее — 10%</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= USERS ================= -->
+    <section class="page" id="page-users">
+      <div class="topbar">
+        <div><h1>👥 Пользователи</h1><div class="sub">Управление аккаунтами: удаление с историей, сброс паролей, роли</div></div>
+      </div>
+
+      <div class="toolbar">
+        <input type="search" class="search" id="q" placeholder="🔍 Поиск по email / имени…" oninput="renderUsers()">
+        <select id="fRole" onchange="renderUsers()">
+          <option value="">Все роли</option><option value="admin">Админы</option><option value="user">Пользователи</option>
+        </select>
+        <button class="btn secondary" onclick="toast('⟳ Список обновлён');renderUsers()">⟳ Обновить</button>
+        <div class="count-note" id="countNote"></div>
+      </div>
+
+      <div class="card" style="padding:6px 0">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Пользователь</th><th>Роль</th><th>Статус</th><th>Записей</th><th>Регистрация</th><th style="text-align:right">Действия</th>
+            </tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= DISHES ================= -->
+    <section class="page" id="page-dishes">
+      <div class="topbar">
+        <div><h1>🍽 Справочник блюд</h1><div class="sub">Глобальные блюда, доступные всем пользователям</div></div>
+        <button class="btn" onclick="toast('➕ Форма добавления блюда (демо)')">+ Добавить блюдо</button>
+      </div>
+      <div class="card" style="padding:6px 0">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Название</th><th>Калории</th><th>Белки</th><th>Жиры</th><th>Углеводы</th><th style="text-align:right">Действия</th></tr></thead>
+            <tbody>
+              <tr><td class="u-name">Куриная грудка гриль, 150 г</td><td>248 ккал</td><td>46 г</td><td>5 г</td><td>0 г</td><td><div class="row-actions"><button class="btn sm secondary">✏️</button><button class="btn sm danger" onclick="toast('🗑 Блюдо удалено','danger')">🗑</button></div></td></tr>
+              <tr><td class="u-name">Овсянка на воде, 250 г</td><td>295 ккал</td><td>11 г</td><td>5 г</td><td>53 г</td><td><div class="row-actions"><button class="btn sm secondary">✏️</button><button class="btn sm danger" onclick="toast('🗑 Блюдо удалено','danger')">🗑</button></div></td></tr>
+              <tr><td class="u-name">Творог 5%, 200 г</td><td>242 ккал</td><td>32 г</td><td>10 г</td><td>6 г</td><td><div class="row-actions"><button class="btn sm secondary">✏️</button><button class="btn sm danger" onclick="toast('🗑 Блюдо удалено','danger')">🗑</button></div></td></tr>
+              <tr><td class="u-name">Банан, 1 шт (120 г)</td><td>106 ккал</td><td>1.5 г</td><td>0.4 г</td><td>24 г</td><td><div class="row-actions"><button class="btn sm secondary">✏️</button><button class="btn sm danger" onclick="toast('🗑 Блюдо удалено','danger')">🗑</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="page" id="page-settings">
+      <div class="topbar">
+        <div><h1>⚙️ Настройки</h1><div class="sub">Конфигурация админки и сервисных ключей</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="font-size:14px;font-weight:800;margin-bottom:16px">Сервисные переменные</h3>
+          <div class="field" style="margin-bottom:14px">
+            <div class="stat-label" style="margin-bottom:6px">SUPABASE_SERVICE_ROLE_KEY</div>
+            <input type="text" value="eyJhbGciOi…••••••••••••" style="width:100%" readonly>
+            <div style="font-size:12px;color:var(--ok);margin-top:6px">✔ Ключ настроен — кнопка «Сброс пароля» работает</div>
+          </div>
+          <div class="field">
+            <div class="stat-label" style="margin-bottom:6px">Site URL / Redirect URLs</div>
+            <input type="text" value="https://metabo.vercel.app/#/auth?mode=recovery" style="width:100%">
+          </div>
+          <div style="margin-top:18px"><button class="btn" onclick="toast('💾 Настройки сохранены')">💾 Сохранить</button></div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:14px;font-weight:800;margin-bottom:16px">Опасная зона</h3>
+          <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:16px">
+            Удаление пользователей необратимо: RPC <code style="color:#c4b5fd">admin_delete_user</code> каскадно
+            стирает журнал, замеры InBody, цели, блюда и профиль.
+          </p>
+          <button class="btn danger" onclick="toast('🧹 Демо: очистка не выполнена','danger')">🧹 Удалить всех demo-пользователей</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===== Delete confirm modal ===== -->
+<div class="backdrop" id="backdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>🗑 Удалить пользователя?</h3>
+    <p id="delText"></p>
+    <div class="warn-box">Внимание: будут удалены <b>все данные</b> — журнал питания и активностей, замеры InBody, цели, блюда и профиль. Отменить это действие невозможно.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Отмена</button>
+      <button class="btn danger" onclick="confirmDelete()">Да, удалить всё</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ---------- Demo data ---------- */
+let users = [
+  {id:1,name:'Админ Админов',email:'admin@admin.ru',role:'admin',status:'active',entries:412,reg:'12 авг. 2025',demo:false},
+  {id:2,name:'Иван Петров',email:'ivan@mail.ru',role:'user',status:'dormant',entries:87,reg:'03 сен. 2025',demo:false},
+  {id:3,name:'Мария Смирнова',email:'maria.s@gmail.com',role:'user',status:'active',entries:1204,reg:'18 окт. 2025',demo:false},
+  {id:4,name:'Демо Аккаунт',email:'demo@metabo.ru',role:'user',status:'active',entries:96,reg:'01 ноя. 2025',demo:true},
+  {id:5,name:'Алексей Кузнецов',email:'alex.k@yandex.ru',role:'user',status:'dormant',entries:15,reg:'22 янв. 2026',demo:false},
+  {id:6,name:'Ольга Новикова',email:'olga.n@gmail.com',role:'user',status:'active',entries:640,reg:'05 мар. 2026',demo:false},
+  {id:7,name:'Сергей Волков',email:'sergey.v@mail.ru',role:'user',status:'active',entries:231,reg:'14 июл. 2026',demo:false},
+  {id:8,name:' Анна Морозова',email:'anna.m@outlook.com',role:'user',status:'dormant',entries:3,reg:'28 окт. 2026',demo:false},
+];
+let pendingDelete = null;
+
+/* ---------- Navigation ---------- */
+function go(btn){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+btn.dataset.page).classList.add('active');
+}
+
+/* ---------- Users table ---------- */
+function initials(u){return u.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+function renderUsers(){
+  const q=(document.getElementById('q').value||'').toLowerCase();
+  const fr=document.getElementById('fRole').value;
+  const shown=users.filter(u=>(!q||u.email.toLowerCase().includes(q)||u.name.toLowerCase().includes(q))&&(!fr||u.role===fr));
+  document.getElementById('countNote').textContent=`Показано ${shown.length} из ${users.length}`;
+  const tb=document.getElementById('usersBody');
+  if(!shown.length){tb.innerHTML='<tr><td colspan="6"><div class="empty-state">Ничего не найдено 🔍</div></td></tr>';return}
+  tb.innerHTML=shown.map(u=>`
+    <tr>
+      <td><div class="u-cell"><div class="avatar">${initials(u)}</div>
+        <div><div class="u-name">${u.name.trim()}</div><div class="u-email">${u.email}</div></div></div></td>
+      <td>${u.role==='admin'?'<span class="tag admin">ADMIN</span>':'<span class="tag user">USER</span>'}${u.demo?' <span class="tag demo">DEMO</span>':''}</td>
+      <td>${u.status==='active'?'<span class="tag active-t">● активен 7д</span>':'<span class="tag dormant">○ спящий</span>'}</td>
+      <td>${u.entries.toLocaleString('ru-RU')}</td>
+      <td style="color:var(--muted)">${u.reg}</td>
+      <td><div class="row-actions">
+        <button class="btn sm secondary" title="Сбросить пароль" onclick="resetPass(${u.id})">📩 Сброс пароля</button>
+        <button class="btn sm danger" title="Удалить с историей" onclick="askDelete(${u.id})" ${u.role==='admin'&&u.email==='admin@admin.ru'?'disabled style="opacity:.35;cursor:not-allowed" title="Нельзя удалить себя"':''}>🗑 Удалить</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function resetPass(id){
+  const u=users.find(x=>x.id===id);
+  toast(`📩 Письмо для сброса пароля отправлено на ${u.email}`);
+}
+function askDelete(id){
+  const u=users.find(x=>x.id===id);
+  if(u.email==='admin@admin.ru'){toast('⚠ Нельзя удалить самого себя','danger');return}
+  pendingDelete=u;
+  document.getElementById('delText').innerHTML=`Пользователь <b>${u.name.trim()}</b> (${u.email}) будет удалён вместе со всей историей.`;
+  document.getElementById('backdrop').classList.add('open');
+}
+function closeModal(){document.getElementById('backdrop').classList.remove('open');pendingDelete=null}
+function confirmDelete(){
+  if(!pendingDelete)return;
+  users=users.filter(u=>u!==pendingDelete);
+  document.getElementById('navCount').textContent=users.length;
+  toast(`🗑 Удалён: ${pendingDelete.email} (вместе с историей)`,'danger');
+  closeModal();renderUsers();
+}
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='show'+(type==='danger'?' danger':'');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className='',2600);
+}
+
+renderUsers();
+</script>
+</body>
+</html>
