@@ -85,10 +85,39 @@ rls_check as (
                  where n.nspname = 'public' and c.relname = 'admin_roles' and c.relrowsecurity
          ) then 'OK' else 'MISSING' end
 )
-select object, status from table_check
-union all select object, status from column_check
-union all select object, status from legacy_column_check
-union all select object, status from func_check
-union all select object, status from rls_check
-order by case status when 'MISSING' then 0 when 'EXTRA (удалить через remove_sleep_columns.sql)' then 1 else 2 end,
-         object;
+-- Оборачиваем UNION в подзапрос: в PostgreSQL после UNION/INTERSECT/EXCEPT
+-- в ORDER BY нельзя использовать выражения (CASE...), только имена колонок.
+-- Поэтому порядковый номер sort_order вычисляется внутри, а снаружи — по имени.
+select object, status
+  from (
+    select object, status,
+           case when status = 'MISSING' then 0
+                when status like 'EXTRA%' then 1
+                else 2 end as sort_order
+      from table_check
+    union all
+    select object, status,
+           case when status = 'MISSING' then 0
+                when status like 'EXTRA%' then 1
+                else 2 end
+      from column_check
+    union all
+    select object, status,
+           case when status = 'MISSING' then 0
+                when status like 'EXTRA%' then 1
+                else 2 end
+      from legacy_column_check
+    union all
+    select object, status,
+           case when status = 'MISSING' then 0
+                when status like 'EXTRA%' then 1
+                else 2 end
+      from func_check
+    union all
+    select object, status,
+           case when status = 'MISSING' then 0
+                when status like 'EXTRA%' then 1
+                else 2 end
+      from rls_check
+  ) u
+order by sort_order, object;
