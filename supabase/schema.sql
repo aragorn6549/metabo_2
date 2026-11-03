@@ -29,9 +29,20 @@ create table if not exists public.entries (
   duration_min numeric,                                            -- workout/other
   sleep_hours numeric,                                             -- sleep
   sleep_quality int check (sleep_quality between 1 and 5),         -- sleep
+  -- DECISION: границы сна «заснул/проснулся» (ActivityLogger + normalizeSleepWindow).
+  -- Клиент шлёт их в upsert entries; без этих колонок PostgREST падает с 400 (PGRST204
+  -- "Could not find the 'sleep_end' column of 'entries'"). Храним локальные ISO-строки
+  -- 'YYYY-MM-DDTHH:MM' — тип text, чтобы не терять локальное время на timestamptz-преобразованиях.
+  sleep_start text,                                                -- sleep: заснул (локальное ISO)
+  sleep_end   text,                                                -- sleep: проснулся (локальное ISO)
   created_at timestamptz not null default now()
 );
 create index if not exists entries_user_time_idx on public.entries (user_id, occurred_at);
+
+-- Миграция для существующих БД: добавить колонки границ сна, если их нет (идемпотентно).
+alter table public.entries
+  add column if not exists sleep_start text,
+  add column if not exists sleep_end   text;
 
 -- 3. Справочник блюд
 create table if not exists public.dishes (

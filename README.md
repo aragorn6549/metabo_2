@@ -13,6 +13,9 @@ metabolism calculator
 
 ### Установка
 1. Supabase Dashboard → SQL Editor → выполнить целиком `supabase/schema.sql`, затем `supabase/admin.sql`.
+   - Если база уже создана по старой схеме — дополнительно выполнить `supabase/fix_sleep_columns.sql`
+     (добавляет колонки `sleep_start`/`sleep_end` в `entries`; без них сохранение активности «Сон»
+     падает с 400 PGRST204 "Could not find the 'sleep_end' column of 'entries'").
 2. Создать администратора **admin@admin.ru / admin123**:
    - зарегистрироваться в приложении с этим email/паролем (или Dashboard → Authentication → Add user, Auto Confirm = ON);
    - в SQL Editor выполнить из конца `supabase/admin.sql`:

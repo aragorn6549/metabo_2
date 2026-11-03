@@ -26,14 +26,29 @@ export async function fetchIsAdmin(userId, user = null) {
     return true;
   }
   if (adminCheckCache.uid === userId) return adminCheckCache.isAdmin;
-  const { data, error } = await supabase
-    .from('admin_roles')
-    .select('user_id, role')
-    .eq('user_id', userId)
-    .eq('role', 'admin')
-    .maybeSingle();
-  // RLS может молча вернуть пустую строку вместо ошибки — это просто «не админ»
-  const isAdmin = !error && !!data;
+  let data, error;
+  try {
+    ({ data, error } = await supabase
+      .from('admin_roles')
+      .select('user_id, role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle());
+  } catch (err) {
+    // fetch внутри supabase-js может бросить сетевую ошибку — трактуем как «не админ»
+    console.warn('fetchIsAdmin:', err);
+    adminCheckCache = { uid: userId, isAdmin: false };
+    return false;
+  }
+  // Исправление «Uncaught (in promise)»: если миграция supabase/admin.sql не выполнялась,
+  // таблицы admin_roles нет и PostgREST отвечает 404 (PGRST205). Это штатная ситуация
+  // (роль тогда определяется только метаданными — быстрый путь выше), поэтому 404 —
+  // просто «не админ», без console.error и без пробрасывания ошибки наружу.
+  if (error && error.code !== 'PGRST205' && error.code !== '42P01') {
+    // RLS может молча вернуть пустую строку вместо ошибки — это просто «не админ»
+    console.warn('admin_roles check:', error);
+  }
+  const isAdmin = !!data;
   adminCheckCache = { uid: userId, isAdmin };
   return isAdmin;
 }
