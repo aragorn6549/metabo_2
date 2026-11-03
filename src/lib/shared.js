@@ -5,4 +5,8 @@ export { MET_COEFFICIENTS, calcMETCalories } from '@/math/met';
 export { calcBMI } from '@/math/bmi';
 export { computeHourlyRate, simulateDay } from '@/math/simulation';
 export { computePlan, deriveGoalTargets, computePlanSeries, getContextText, assessGoal } from '@/math/goalAssessment';
-export { formatSigned, genId, formatTimer, plural, formatDayLabel } from '@/lib/utils';
+export {
+  formatSigned, genId, formatTimer, plural, formatDayLabel,
+  toLocalIso, parseLocalIso, normalizeSleepWindow, sleepWindow,
+  sleepAttributionDayTs, isAsleepAt, formatSleepRange,
+} from '@/lib/utils';

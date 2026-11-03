@@ -7,9 +7,7 @@
 import { useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import { useStore } from 'zustand';
-import {
-  calculateBMR, calculateTDEE, calcBMI, simulateDay, computePlan, genId,
-} from '@/lib/shared';
+import { calculateBMR, calculateTDEE, calcBMI, simulateDay, computePlan, genId, sleepAttributionDayTs } from '@/lib/shared';
 import { supabase } from '@/lib/supabase';
 
 const dayMs = 86400e3;
@@ -31,6 +29,10 @@ const mapEntryRow = (r) => ({
   duration: toNum(r.duration_min, undefined),
   hours: toNum(r.sleep_hours, undefined),
   quality: toNum(r.sleep_quality, undefined),
+  // Границы сна «заснул/проснулся» — локальные ISO-строки ('YYYY-MM-DDTHH:MM'),
+  // корректно обрабатывают переход суток (23:09 → 08:23 следующего дня).
+  sleep_start: r.sleep_start || undefined,
+  sleep_end: r.sleep_end || undefined,
 });
 
 const entryPayload = (e) => ({
@@ -45,6 +47,8 @@ const entryPayload = (e) => ({
   duration_min: toNum(e.duration ?? e.duration_min),
   sleep_hours: toNum(e.hours ?? e.sleep_hours),
   sleep_quality: toNum(e.quality ?? e.sleep_quality),
+  sleep_start: e.sleep_start ?? null,
+  sleep_end: e.sleep_end ?? null,
 });
 
 const mapInbodyRow = (r) => ({
@@ -292,17 +296,29 @@ export function useMetaboStore(user) {
 
     let history = [];
     if (baseline) {
+      // DECISION: сон относится к дню ПРОБУЖДЕНИЯ (sleepAttributionDayTs), а не к моменту
+      // сохранения записи — если пользователь вспомнил и внёс ночь 15→16 утром 16-го, все
+      // суточные точки пересчитываются по фактическим границам сна.
+      const actsForDay = (startTs, endTs) => activities.filter(a => {
+        if (a.type === 'sleep') {
+          const day = sleepAttributionDayTs(a);
+          return Number.isFinite(day) && day >= startTs && day < endTs;
+        }
+        return a.timestamp >= startTs && a.timestamp < endTs;
+      });
       history = sortedLogs.map(log => {
         const dayStartTs = new Date(log.date); dayStartTs.setHours(0, 0, 0, 0);
         const dayEndTs = dayStartTs.getTime() + dayMs;
+        const dayNow = Math.min(Date.now(), dayEndTs - 1); // прошлые дни симулируются целиком (00:00–23:59)
         const foods = foodLogs.filter(f => f.timestamp >= dayStartTs.getTime() && f.timestamp < dayEndTs);
-        const acts = activities.filter(a => a.timestamp >= dayStartTs.getTime() - dayMs && a.timestamp < dayEndTs);
+        const acts = actsForDay(dayStartTs.getTime() - dayMs, dayEndTs);
+        const dayActs = actsForDay(dayStartTs.getTime(), dayEndTs);
         const calC = foods.reduce((s, f) => s + (+f.calories || 0), 0);
         const macros = sumMacros(foods);
         const wCal = acts.filter(a => a.type === 'workout').reduce((s, a) => s + (+a.calories || 0), 0);
         const tdee = calculateTDEE(log.bmr || baseline.bmr, baseline.activityLevel, wCal, macros);
         const balance = calC - tdee;
-        const simDay = simulateDay(foods, acts.filter(a => a.timestamp >= dayStartTs.getTime()), balance);
+        const simDay = simulateDay(foods, dayActs, balance, { now: dayNow });
         return {
           date: log.date, weight: log.weight, fatPercent: log.fatPercent, musclePercent: log.musclePercent,
           caloriesConsumed: calC, balance,
@@ -315,16 +331,27 @@ export function useMetaboStore(user) {
     if (baseline) {
       const todayStartTs = new Date(); todayStartTs.setHours(0, 0, 0, 0);
       const todayFoods = foodLogs.filter(f => f.timestamp >= todayStartTs.getTime());
-      const todayActs = activities.filter(a => a.timestamp >= todayStartTs.getTime());
+      // Сон сегодняшнего дня — по факту пробуждения сегодня (в т.ч. внесённый позже),
+      // а не по времени нажатия «сохранить».
+      const todayActs = activities.filter(a => {
+        if (a.type === 'sleep') {
+          const day = sleepAttributionDayTs(a);
+          return Number.isFinite(day) && day >= todayStartTs.getTime();
+        }
+        return a.timestamp >= todayStartTs.getTime();
+      });
       const macros = sumMacros(todayFoods);
       const caloriesConsumed = todayFoods.reduce((s, f) => s + (+f.calories || 0), 0);
       const wCal = todayActs.filter(a => a.type === 'workout').reduce((s, a) => s + (+a.calories || 0), 0);
       const tdee = calculateTDEE(baseline.bmr, baseline.activityLevel, wCal, macros);
       const balance = caloriesConsumed - tdee;
-      const sleepEntry = todayActs.find(a => a.type === 'sleep');
+      const sleepEntries = todayActs.filter(a => a.type === 'sleep');
+      const sleepEntry = sleepEntries[sleepEntries.length - 1] || null;
       todayData = {
         tdee, caloriesConsumed, balance, macros,
         sleepHours: sleepEntry?.hours ?? 8,
+        sleepStart: sleepEntry?.sleep_start ?? null,
+        sleepEnd: sleepEntry?.sleep_end ?? null,
         hasStrength: todayActs.some(a => a.type === 'workout' && a.subtype === 'strength'),
       };
       sim = simulateDay(todayFoods, todayActs, balance);
