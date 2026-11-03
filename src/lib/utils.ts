@@ -32,7 +32,11 @@ function formatDayLabel(date) {
 // ============================================================
 // СОН: границы «заснул / проснулся» с корректной обработкой перехода суток
 // (уснул 15-го в 23:09, проснулся 16-го в 08:23).
-// Храним sleep_start/sleep_end как локальные ISO-строки ('YYYY-MM-DDTHH:MM').
+// DECISION: в БД храним только длительность (sleep_hours) и качество; момент
+// ПРОБУЖДЕНИЯ = occurred_at записи, засыпание = пробуждение − длительность.
+// Раньше клиент отправлял отдельные поля sleep_start/sleep_end, которых нет в
+// схеме entries, и upsert падал с 400 (PGRST204). Теперь границы выводятся из
+// timestamp/hours — дополнительных колонок не требуется.
 // Днём сна считается день пробуждения — все суточные агрегаты (сегодняшний блок,
 // history, симуляция) пересчитываются именно от него.
 
@@ -64,10 +68,18 @@ function normalizeSleepWindow(startVal, endVal) {
   return { start, end, hours };
 }
 
-// Границы сна из записи журнала (или null, если заданы некорректно)
+// Границы сна из записи журнала: [пробуждение − длительность, пробуждение].
+// timestamp записи = момент пробуждения (occurred_at), hours = длительность сна.
+// Fallback для старых записей с явными границами (sleep_start/sleep_end), если
+// такие строки остались в локальном состоянии до миграции схемы.
 function sleepWindow(e) {
   if (!e || e.type !== 'sleep') return null;
-  return normalizeSleepWindow(e.sleep_start ?? e.sleepStart, e.sleep_end ?? e.sleepEnd);
+  const end = Number.isFinite(e.timestamp) ? e.timestamp : NaN;
+  const hours = Number(e.hours ?? e.sleep_hours);
+  if (Number.isFinite(end) && Number.isFinite(hours) && hours > 0 && hours <= 24) {
+    return { start: end - hours * 3600e3, end, hours: Math.round(hours * 10) / 10 };
+  }
+  return null;
 }
 
 // День (полночь локального времени), к которому относится запись сна — по пробуждению.
