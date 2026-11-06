@@ -149,7 +149,7 @@
       <div class="admin-chip">
         <div class="avatar">АА</div>
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text)">admin@admin.ru</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">admin@admin</div>
           <div style="font-size:11px">роль: admin</div>
         </div>
       </div>
@@ -311,7 +311,7 @@
 <script>
 /* ---------- Demo data ---------- */
 let users = [
-  {id:1,name:'Админ Админов',email:'admin@admin.ru',role:'admin',status:'active',entries:412,reg:'12 авг. 2025',demo:false},
+  {id:1,name:'Админ Админов',email:'admin@admin',role:'admin',status:'active',entries:412,reg:'12 авг. 2025',demo:false},
   {id:2,name:'Иван Петров',email:'ivan@mail.ru',role:'user',status:'dormant',entries:87,reg:'03 сен. 2025',demo:false},
   {id:3,name:'Мария Смирнова',email:'maria.s@gmail.com',role:'user',status:'active',entries:1204,reg:'18 окт. 2025',demo:false},
   {id:4,name:'Демо Аккаунт',email:'demo@metabo.ru',role:'user',status:'active',entries:96,reg:'01 ноя. 2025',demo:true},
@@ -373,7 +373,7 @@ function renderUsers(){
       <td style="color:var(--muted)">${u.reg}</td>
       <td><div class="row-actions">
         <button class="btn sm secondary" title="Сбросить пароль" onclick="resetPass(${u.id})">📩 Сброс пароля</button>
-        <button class="btn sm danger" title="Удалить с историей" onclick="askDelete(${u.id})" ${u.role==='admin'&&u.email==='admin@admin.ru'?'disabled style="opacity:.35;cursor:not-allowed" title="Нельзя удалить себя"':''}>🗑 Удалить</button>
+        <button class="btn sm danger" title="Удалить с историей" onclick="askDelete(${u.id})" ${u.role==='admin'&&u.email==='admin@admin'?'disabled style="opacity:.35;cursor:not-allowed" title="Нельзя удалить себя"':''}>🗑 Удалить</button>
       </div></td>
     </tr>`).join('');
 }
@@ -384,7 +384,7 @@ function resetPass(id){
 }
 function askDelete(id){
   const u=users.find(x=>x.id===id);
-  if(u.email==='admin@admin.ru'){toast('⚠ Нельзя удалить самого себя','danger');return}
+  if(u.email==='admin@admin'){toast('⚠ Нельзя удалить самого себя','danger');return}
   pendingDelete=u;
   document.getElementById('delText').innerHTML=`Пользователь <b>${u.name.trim()}</b> (${u.email}) будет удалён вместе со всей историей.`;
   document.getElementById('backdrop').classList.add('open');

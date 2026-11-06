@@ -164,22 +164,22 @@ grant execute on function public.admin_send_password_reset(text)     to authenti
 grant execute on function public.admin_dashboard_stats()             to authenticated;
 
 -- ------------------------------------------------------------
--- 8. Назначение администратора (admin@admin.ru) — оба канала сразу
+-- 8. Назначение администратора (admin@admin) — оба канала сразу
 -- ------------------------------------------------------------
 -- 8.1 Через таблицу ролей:
 insert into public.admin_roles (user_id)
-select id from auth.users where email = 'admin@admin.ru'
+select id from auth.users where email = 'admin@admin'
 on conflict (user_id) do nothing;
 
 -- 8.2 Через метаданные (работает даже без таблицы, роль попадает в JWT):
 update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin')
-where email = 'admin@admin.ru';
+where email = 'admin@admin';
 
 -- ВАЖНО: после изменения метаданных выйти и войти заново (роль зашита в JWT).
 
 -- ============================================================
 -- Проверка выполнения (запустите отдельно, если хотите убедиться):
---   select public.is_admin(id) from auth.users where email = 'admin@admin.ru';  -- должно быть true
+--   select public.is_admin(id) from auth.users where email = 'admin@admin';  -- должно быть true
 --   select public.admin_dashboard_stats();                                      -- из сессии админа
 -- ============================================================
