@@ -80,13 +80,13 @@ grant execute on function public.admin_send_password_reset(text)     to authenti
 
 -- Назначить админа через таблицу:
 insert into public.admin_roles (user_id)
-select id from auth.users where email = 'admin@admin.ru'
+select id from auth.users where email = 'admin@admin'
 on conflict (user_id) do nothing;
 
 -- Или назначить админа через метаданные (работает даже без таблицы):
 update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin')
-where email = 'admin@admin.ru';
+where email = 'admin@admin';
 -- ВАЖНО: после изменения метаданных выйти и войти заново (роль зашита в JWT).
 -- 6. RPC: агрегаты для дашборда админки (AdminPage.jsx) — всего по БД, только для админа
 create or replace function public.admin_dashboard_stats()

@@ -16,10 +16,10 @@ metabolism calculator
    - Если база уже создана по старой схеме — дополнительно выполнить `supabase/fix_sleep_columns.sql`
      (добавляет колонки `sleep_start`/`sleep_end` в `entries`; без них сохранение активности «Сон»
      падает с 400 PGRST204 "Could not find the 'sleep_end' column of 'entries'").
-2. Создать администратора **admin@admin.ru / admin123**:
+2. Создать администратора **admin@admin / admin123**:
    - зарегистрироваться в приложении с этим email/паролем (или Dashboard → Authentication → Add user, Auto Confirm = ON);
    - в SQL Editor выполнить из конца `supabase/admin.sql`:
-     `insert into public.admin_roles (user_id) select id from auth.users where email = 'admin@admin.ru';`
+     `insert into public.admin_roles (user_id) select id from auth.users where email = 'admin@admin';`
 3. Для кнопки «Сброс пароля» в админке добавить в переменные окружения Vercel (только сервер!):
    `SUPABASE_SERVICE_ROLE_KEY` (Dashboard → Settings → API → service_role). Без неё кнопка
    вернёт понятную ошибку, а пользователи смогут восстановить пароль сами со страницы входа.
